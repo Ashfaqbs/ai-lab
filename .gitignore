@@ -1,0 +1,32 @@
+# Secrets / environment
+.env
+*.env
+!*.env.example
+
+# Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
+npm-debug.log*
+
+# App-generated runtime data
+audit.log
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
