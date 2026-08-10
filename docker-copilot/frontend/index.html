@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Docker Copilot</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <h2>Containers</h2>
+        <ul id="container-list"></ul>
+      </aside>
+      <main class="chat">
+        <div id="messages" class="messages"></div>
+        <form id="chat-form" class="chat-form">
+          <input id="chat-input" type="text" placeholder="ask about your containers..." autocomplete="off" />
+          <button type="submit">Send</button>
+        </form>
+      </main>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
