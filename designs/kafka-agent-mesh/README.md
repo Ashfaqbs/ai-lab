@@ -173,13 +173,138 @@ Main Agent (plans only) --resolve cluster--> Metadata / Topology Agent --> clust
 Each specialist agent calls only its assigned cluster's KafkaIQ MCP server; none access
 Kafka directly.
 
-## 6. Open Questions and Next Steps
+## 6. Interface Contracts and Implementation Prerequisites
+
+This section specifies the details required to implement Section 3 consistently. It
+resolves the gaps identified in design review before an implementation plan is written.
+
+### 6.1 KafkaIQ Deployment Prerequisite
+
+KafkaIQ, as it exists today, initializes a single Kafka connection per running process via
+`initialize_kafka_connection`. It does not support serving multiple clusters from one
+instance. This design therefore requires one KafkaIQ process per registered cluster, each
+started with its own bootstrap servers and listening on its own port. This is a deployment
+requirement on top of KafkaIQ as-is, not a change to its code. `cluster_registry` (Section
+3.3) stores the resulting `kafkaiq_mcp_url` per cluster so specialist agents never need to
+know this detail.
+
+### 6.2 Agent-to-Tool Mapping
+
+Each specialist agent's responsibilities map to specific KafkaIQ MCP tools. An agent may
+call more than one tool per invocation; all tool results it uses become part of the
+finding it writes.
+
+| Agent | KafkaIQ tools called |
+|---|---|
+| Broker / Cluster Agent | `kafka_health_check`, `get_cluster_details`, `broker_leadership_distribution`, `get_broker_resources`, `get_offline_partitions` |
+| Topic Agent | `list_kafka_topics`, `describe_kafka_topic`, `get_kafka_topic_config` |
+| Consumer Group / Lag Agent | `get_consumer_lag` |
+| Metadata / Topology Agent | reads `cluster_registry` directly; does not call KafkaIQ |
+| Performance Agent *(v2)* | not covered by current KafkaIQ tools; requires new KafkaIQ tooling before this agent can be built |
+
+### 6.3 Finding Schema
+
+Every specialist agent writes one Finding object to
+`session:{id}:finding:{agent}`. All Findings share a common envelope so the Verifier
+Agent (Section 6.4) can process them without per-agent special cases:
+
+```json
+{
+  "agent": "broker_cluster_agent",
+  "cluster_id": "payments-prod",
+  "tool_calls": [
+    {
+      "tool": "get_broker_resources",
+      "arguments": { "broker_id": 2 },
+      "result": { "cpu_pct": 91, "disk_pct": 44 },
+      "called_at": "2026-08-18T10:14:02Z"
+    }
+  ],
+  "facts": [
+    {
+      "id": "broker_cluster_agent.0",
+      "statement": "Broker 2 CPU utilization is 91 percent",
+      "source_tool_call": 0
+    }
+  ],
+  "status": "ok"
+}
+```
+
+`status` is one of `ok`, `partial` (some tool calls failed or timed out), or `error` (the
+agent could not produce any facts). `facts` is a flat list of atomic, single-value
+statements derived directly from `tool_calls`; an agent must not include a fact that
+requires combining or interpreting multiple tool results; combined statements (for
+example, an average across brokers) are computed by the Main Agent during synthesis and
+must cite every `facts[].id` used to derive them.
+
+### 6.4 Verifier Algorithm
+
+The Verifier Agent does not perform free-text matching against findings. Instead, the
+Main Agent is required to produce its draft answer as a list of sentence objects, each
+citing the fact IDs it is based on:
+
+```json
+{
+  "sentences": [
+    {
+      "text": "Broker 2 is under high CPU load at 91 percent utilization.",
+      "cites": ["broker_cluster_agent.0"]
+    },
+    {
+      "text": "This is consistent with the consumer lag increase.",
+      "cites": ["broker_cluster_agent.0", "consumer_lag_agent.2"]
+    }
+  ]
+}
+```
+
+The Verifier Agent then applies the following deterministic checks, with no LLM
+involvement:
+
+1. Every `cites` entry must resolve to a `facts[].id` present in this session's findings.
+   A sentence citing an unknown or missing ID is removed from the answer.
+2. A sentence with an empty `cites` list is removed unless it is a purely structural
+   statement (for example, a section heading), which must be flagged as such by the Main
+   Agent at generation time.
+3. Numeric values written directly in `text` (for example, "91 percent") are checked
+   against the numeric value in every cited fact; a mismatch removes the sentence and logs
+   a verification failure for review.
+4. If, after steps 1 to 3, the plan's required findings (Section 6.5) are not fully
+   represented by at least one surviving sentence, the entire answer is replaced with an
+   explicit "insufficient data" response naming which required finding is missing.
+
+This makes grounding a property of the answer's data structure, not a property enforced
+by prompt instruction alone.
+
+### 6.5 Insufficient-Data Rule
+
+Before specialists run, the Main Agent's plan (`session:{id}:plan`) must list the findings
+it considers required to answer the question, not only which agents to invoke. An answer
+may be returned only if every required finding has `status: ok` or `status: partial` with
+at least one usable fact. If a required finding has `status: error` or is absent, the
+Main Agent must return "insufficient data," naming the missing finding, instead of
+synthesizing an answer from the findings that did succeed.
+
+### 6.6 Cluster Registry Storage
+
+Storing `cluster_registry` only in Redis is acceptable for the v1 local demonstration but
+is not a production-appropriate source of truth: Redis is not the system of record for
+data that must survive independently of the cache layer. For production use, the registry
+should be backed by a durable store (for example, PostgreSQL) with Redis used as a
+read-through cache in front of it, so `cluster_registry:{cluster_id}` reads stay fast
+without Redis being the only copy of the data.
+
+## 7. Open Questions and Next Steps
 
 - Orchestration framework: LangGraph (Python).
 - LLM: Grok API, used strictly for planning and synthesis, never for fact generation, per
   Section 3.2.
 - Proposed v1 scope: Broker, Topic, Consumer/Lag, Metadata, and Verifier agents, plus
-  Redis. Performance Agent and Runbook/Knowledge Agent are designated v2 extension points.
-- Not yet decided: the exact LangGraph graph structure, KafkaIQ MCP endpoint-per-cluster
-  deployment details, and the implementation plan, to be produced separately following
-  review of this design.
+  Redis, using the interfaces defined in Section 6. Performance Agent and Runbook/
+  Knowledge Agent are designated v2 extension points and require new KafkaIQ tooling
+  before they can be built (Section 6.2).
+- Not yet decided: the exact LangGraph graph structure, the docker-compose and KRaft
+  configuration for the local two-cluster simulation (Section 3.4 describes the intent;
+  no configuration has been written yet), and the implementation plan itself, to be
+  produced separately following review of this design.
