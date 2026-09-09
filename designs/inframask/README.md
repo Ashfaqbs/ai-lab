@@ -216,25 +216,25 @@ inside the content script running on the page.
 ```mermaid
 sequenceDiagram
     participant User
-    participant Box as Input box (page DOM)
+    participant InputBox as Input box (page DOM)
     participant ME as Masking Engine
     participant Store as Token Store (chrome.storage.session)
     participant AI as AI provider
     participant UO as Unmask Observer
 
-    User->>Box: Types "check broker1:9092,broker2:9092"
-    Box->>ME: input event (debounced)
+    User->>InputBox: Types "check broker1:9092,broker2:9092"
+    InputBox->>ME: input event (debounced)
     ME->>Store: Has "broker1:9092,broker2:9092" been tokenized this session?
     Store-->>ME: No
     ME->>Store: Store mapping ⟦BOOTSTRAP_1⟧ = "broker1:9092,broker2:9092"
-    ME->>Box: Replace in place with "check ⟦BOOTSTRAP_1⟧"
-    User->>Box: Presses Enter
-    Box->>AI: Sends masked text only
-    AI-->>Box: Response mentions "⟦BOOTSTRAP_1⟧ looks under-replicated"
-    Box->>UO: MutationObserver fires on new response node
+    ME->>InputBox: Replace in place with "check ⟦BOOTSTRAP_1⟧"
+    User->>InputBox: Presses Enter
+    InputBox->>AI: Sends masked text only
+    AI-->>InputBox: Response mentions "⟦BOOTSTRAP_1⟧ looks under-replicated"
+    InputBox->>UO: MutationObserver fires on new response node
     UO->>Store: Look up ⟦BOOTSTRAP_1⟧
     Store-->>UO: "broker1:9092,broker2:9092"
-    UO->>Box: Swap token for real value, display only
+    UO->>InputBox: Swap token for real value, display only
 ```
 
 **Step by step:**
