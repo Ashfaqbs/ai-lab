@@ -13,6 +13,10 @@ design, and Model Context Protocol (MCP) servers among them.
   from it don't get tangled together).
   - [`kafka-agent-mesh`](designs/kafka-agent-mesh/README.md) — KafkaMind, a grounded
     multi-agent diagnostic system for distributed Kafka fleets.
+  - [`agentic-support-platform`](designs/agentic-support-platform/README.md) — AgentDesk, a
+    self-service agentic RAG support platform: teams register an application and its
+    documentation and get a Slack-integrated, grounded assistant with optional live-context
+    tool calls into their own MCP server.
   - [`inframask`](designs/inframask/README.md) — InfraMask, a reversible browser extension
     that masks infra identifiers (IPs, hostnames, Kafka bootstrap servers) before they reach
     an AI chat UI, and restores them in the assistant's response.
