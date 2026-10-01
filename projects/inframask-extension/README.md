@@ -76,6 +76,30 @@ button in the popup) - see [Options & settings](#options--settings) below.
    only; nothing is re-sent.
 6. Closing the tab clears everything.
 
+### Closing the "type fast, hit Enter before it masks" race
+
+The debounced `input` handler above is fine for masking as you type, but on its own it
+leaves a real gap: type a secret and hit Enter, or paste and immediately click Send,
+faster than the 150ms debounce, and the *original* unmasked text could go out before
+the debounce ever fires. Shortening the debounce only makes this rarer, not impossible.
+
+Instead, `content-script.js` intercepts the actual submit triggers - Enter and the
+site's Send button - at the document root, in the capture phase, which runs before the
+page's own framework-level handlers ever see the event (this is the same mechanism
+that made the earlier ProseMirror fix work: capture-phase listeners on `document` fire
+before any bubble-phase listener on a descendant, regardless of where the framework
+attaches its own handling). On interception it: cancels the native event, forces an
+immediate (non-debounced) mask pass, then re-triggers the real send - preferring a
+click on the site's actual Send button, falling back to re-dispatching a native Enter
+keydown if the button selector doesn't match. The real send only ever fires with
+whatever is in the box *after* masking, never before.
+
+Verified live against chatgpt.com: typed `password=hunter2` character-by-character,
+then sent Enter as a discrete keypress immediately after (the adversarial case this
+is meant to cover). The box held the masked `password=⟦CRED_1⟧` *before* the
+interception's own logic ran its post-mask step - confirming the mask completes
+synchronously ahead of any possible submission, not racing it.
+
 ## Options & settings
 
 Everything is controlled from one place: the **Options** page (`src/options.html`,
@@ -148,7 +172,16 @@ npm test
   send button out for the empty-input mic icon (state in sync with the DOM).
 - Selectors in `site-adapters.js` are best-effort against each site's current DOM.
   ChatGPT, Claude, and Gemini all change their markup periodically; if masking stops
-  triggering on a site, that selector is the first thing to check.
+  triggering on a site, that selector is the first thing to check. `sendButtonSelector`
+  is only live-verified for ChatGPT; Claude's and Gemini's are best-effort guesses. If
+  one goes stale, Enter is still caught (so masking still happens before any submit),
+  but the fallback re-dispatches a synthetic Enter keydown instead of clicking the real
+  button, which is slightly less reliable across frameworks.
+- The Enter/Send interception only recognizes plain `Enter` (no modifier) as a submit
+  trigger, matching how all three sites behave by default. A site-level setting that
+  remaps sending to `Ctrl+Enter`/`Cmd+Enter` instead would not be caught - the debounced
+  `input` masking still applies, so the race window described above would reopen for
+  that specific remapped shortcut.
 - Masking is content-script-only (visible, in-place DOM rewriting), not a network-layer
   interceptor — matches InfraMask's original design decision (Section 10, alternative
   C) to keep masking transparent and editable rather than invisible.

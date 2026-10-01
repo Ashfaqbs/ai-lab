@@ -12,18 +12,25 @@ const SITE_ADAPTERS = [
     hostnames: ['chatgpt.com', 'chat.openai.com'],
     inputSelector: '#prompt-textarea, form [contenteditable="true"]',
     responseContainerSelector: '[data-message-author-role="assistant"]',
+    // Verified live against chatgpt.com.
+    sendButtonSelector: '#composer-submit-button, button[data-testid="send-button"]',
   },
   {
     name: 'claude',
     hostnames: ['claude.ai'],
     inputSelector: 'div[contenteditable="true"][enterkeyhint], div.ProseMirror[contenteditable="true"]',
     responseContainerSelector: '[data-testid="user-message"] ~ div, .font-claude-message',
+    // Not live-verified (see README "Known limitations") - if Enter-to-send stops being
+    // caught on claude.ai, this selector is the first thing to check.
+    sendButtonSelector: 'button[aria-label="Send Message"], button[aria-label="Send message"]',
   },
   {
     name: 'gemini',
     hostnames: ['gemini.google.com'],
     inputSelector: 'rich-textarea div[contenteditable="true"]',
     responseContainerSelector: 'message-content',
+    // Not live-verified (see README "Known limitations").
+    sendButtonSelector: 'button[aria-label="Send message"]',
   },
 ];
 

@@ -20,10 +20,85 @@ window.__inframaskContentScriptLoaded = true;
   let debounceTimer = null;
   let inputEl = null;
   let responseContainer = null;
+  let suppressNextEnter = false;
+  let suppressNextSendClick = false;
 
   loadConfig();
   attachWhenReady();
   listenForPopupRequests();
+  interceptSubmission();
+
+  // The debounced `input` handler is fine for masking as-you-type, but it leaves a real gap:
+  // type a secret and hit Enter (or paste and immediately click Send) faster than the 150ms
+  // debounce, and the ORIGINAL unmasked text goes out before runMask() ever fires. Rather than
+  // just shortening the debounce (still racy, just less often), intercept the actual submit
+  // triggers - Enter and the site's Send button - in the capture phase at the document root,
+  // which runs before the page's own framework-level handlers ever see the event. That lets
+  // this force a synchronous mask pass first, then re-trigger the real send once the box
+  // provably contains only masked text.
+  function interceptSubmission() {
+    document.addEventListener('keydown', onKeyDownCapture, true);
+    document.addEventListener('click', onClickCapture, true);
+  }
+
+  function onKeyDownCapture(e) {
+    if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+    if (!inputEl || e.target !== inputEl) return;
+    if (suppressNextEnter) {
+      suppressNextEnter = false;
+      return;
+    }
+    if (!settings.enabled) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    forceMaskNow();
+    submitNow();
+  }
+
+  function onClickCapture(e) {
+    if (!adapter.sendButtonSelector) return;
+    const sendBtn = e.target.closest(adapter.sendButtonSelector);
+    if (!sendBtn) return;
+    if (suppressNextSendClick) {
+      suppressNextSendClick = false;
+      return;
+    }
+    if (!settings.enabled) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    forceMaskNow();
+    submitNow();
+  }
+
+  // Skips the debounce entirely - masks whatever is in the box right now, synchronously.
+  function forceMaskNow() {
+    clearTimeout(debounceTimer);
+    if (inputEl) runMask();
+  }
+
+  // Re-triggers the real send now that the box is guaranteed masked. Prefers clicking the
+  // site's actual Send button (most reliable); falls back to re-dispatching a native Enter
+  // keydown if no send button is found, for sites/states where the button selector is stale.
+  function submitNow() {
+    const sendBtn = adapter.sendButtonSelector && document.querySelector(adapter.sendButtonSelector);
+    const sendBtnReady = sendBtn && !sendBtn.disabled && sendBtn.getAttribute('aria-disabled') !== 'true';
+    if (sendBtnReady) {
+      suppressNextSendClick = true;
+      sendBtn.click();
+      return;
+    }
+    if (!inputEl) return;
+    suppressNextEnter = true;
+    inputEl.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true })
+    );
+  }
 
   function listenForPopupRequests() {
     if (typeof chrome === 'undefined' || !chrome.runtime) return;
