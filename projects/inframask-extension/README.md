@@ -95,6 +95,16 @@ npm test
 
 ## Known limitations
 
+- Rewriting a React/ProseMirror-controlled `contentEditable` (ChatGPT, Claude) must go
+  through `document.execCommand('insertText', ...)`, not a direct `el.textContent =`
+  write. These editors keep their own internal document model separate from the DOM;
+  a direct textContent write changes what's displayed but never reaches that model, so
+  the framework still submits the original, unmasked text even though the screen shows
+  a token. `execCommand` fires the native `beforeinput`/`input` events the editor
+  listens to, which updates its internal state to match. Verified live against
+  chatgpt.com: a raw `textContent` clear left the send button's `aria-disabled`
+  unchanged (stale state), while an `execCommand`-based clear correctly swapped the
+  send button out for the empty-input mic icon (state in sync with the DOM).
 - Selectors in `site-adapters.js` are best-effort against each site's current DOM.
   ChatGPT, Claude, and Gemini all change their markup periodically; if masking stops
   triggering on a site, that selector is the first thing to check.

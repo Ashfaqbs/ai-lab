@@ -84,11 +84,31 @@
     if (!changed) return;
 
     const caretOffset = getCaretCharOffset(inputEl);
-    inputEl.textContent = text;
     const delta = text.length - original.length;
+
+    replaceEditableContent(inputEl, text);
     setCaretCharOffset(inputEl, Math.max(0, caretOffset + delta));
 
     updateBadge(maskedCount);
+  }
+
+  // Sites like ChatGPT and Claude render their input box as a ProseMirror/React-controlled
+  // contentEditable: the framework owns an internal document model and the DOM is just its
+  // output. Writing `el.textContent` directly changes what's displayed but never reaches that
+  // internal model, so the ORIGINAL unmasked text is what actually gets submitted. Routing the
+  // replacement through execCommand fires the native beforeinput/input events these editors
+  // listen to, which updates their internal state to match what's now on screen.
+  function replaceEditableContent(el, newText) {
+    el.focus();
+    const sel = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    const applied = document.execCommand('insertText', false, newText);
+    if (!applied) {
+      el.textContent = newText;
+    }
   }
 
   function unmaskNode(node) {
