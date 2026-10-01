@@ -34,6 +34,10 @@ design, and Model Context Protocol (MCP) servers among them.
   - [`docker-copilot`](projects/docker-copilot/README.md) — a human-in-the-loop chat agent
     for observing and managing local Docker containers: free read access, every
     state-changing action gated behind explicit human approval.
+  - [`inframask-extension`](projects/inframask-extension/README.md) — a Chrome extension
+    implementing the `inframask` design: masks passwords, API keys, bootstrap servers, and
+    other infra identifiers before they reach an AI chat UI, and restores them in the
+    response view only.
 
 ## Conventions
 

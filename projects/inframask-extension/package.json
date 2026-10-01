@@ -1,0 +1,11 @@
+{
+  "name": "inframask-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reversible browser extension that masks secrets and infra identifiers before they reach an AI chat UI.",
+  "scripts": {
+    "test": "node --test tests/detectors.test.js tests/masking-engine.test.js",
+    "icons": "node scripts/make-icons.js"
+  },
+  "license": "MIT"
+}

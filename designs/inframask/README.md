@@ -1,6 +1,9 @@
 # InfraMask: A Reversible Infra-Identifier Masking Browser Extension for AI Chat UIs
 
-**Status:** Design proposal. Not yet implemented.
+**Status:** Implemented — see [`projects/inframask-extension`](../../projects/inframask-extension/README.md).
+The v1 implementation folds credential detection (passwords, API keys, connection
+strings) into scope alongside infra identifiers, rather than deferring it to v2 as
+Section 3 below originally proposed; see the implementation's README for why.
 
 ## 1. Problem statement
 

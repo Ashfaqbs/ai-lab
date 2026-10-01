@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { font-family: system-ui, sans-serif; width: 280px; padding: 12px; }
+      h1 { font-size: 14px; margin: 0 0 8px; }
+      label { display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
+      #tokens { max-height: 160px; overflow-y: auto; font-size: 11px; border-top: 1px solid #ddd; padding-top: 6px; }
+      #tokens div { padding: 2px 0; border-bottom: 1px dotted #eee; word-break: break-all; }
+      button { width: 100%; padding: 6px; font-size: 12px; margin-top: 8px; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <h1>InfraMask</h1>
+    <label>Masking enabled <input type="checkbox" id="enabledToggle" /></label>
+    <div id="status" style="font-size: 11px; color: #666;"></div>
+    <div id="tokens"></div>
+    <button id="clearBtn">Clear this tab's tokens</button>
+    <script src="popup.js"></script>
+  </body>
+</html>
