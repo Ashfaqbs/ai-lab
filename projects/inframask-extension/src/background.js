@@ -1,10 +1,11 @@
 // Minimal by design: holds extension-wide on/off state and updates the toolbar badge.
 // Never sees message content - masking/unmasking happen entirely in the content script.
+importScripts('settings.js');
 
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.local.get(['inframaskEnabled'], (res) => {
-    if (typeof res.inframaskEnabled !== 'boolean') {
-      chrome.storage.local.set({ inframaskEnabled: true });
+  chrome.storage.local.get([self.InfraMaskSettings.STORAGE_KEY], (res) => {
+    if (!res[self.InfraMaskSettings.STORAGE_KEY]) {
+      self.InfraMaskSettings.saveSettings(self.InfraMaskSettings.DEFAULT_SETTINGS);
     }
   });
 });

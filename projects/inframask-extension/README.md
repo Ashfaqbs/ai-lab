@@ -15,7 +15,10 @@ The original design scoped out credentials as a v2 "generic PII" concern and foc
 on infra identifiers (IPs, hostnames, bootstrap servers). This implementation folds
 credential detection into v1, because in practice the two travel together: a
 bootstrap server string is rarely pasted without the SASL username/password next to
-it.
+it. It further extends v1 to cover common retail/customer-facing sensitive data
+(emails, phone numbers, SSNs, credit card numbers) behind its own toggle, so teams
+outside pure infra/platform work - e.g. retail, support, anyone handling customer
+records - get the same protection without infra-specific assumptions.
 
 ## What it detects
 
@@ -31,20 +34,28 @@ the real value. Every other detector type (bootstrap servers, connection strings
 keys, etc.) masks the whole match, since there's no separate "key" to preserve and the
 hostname/endpoint itself is usually what needs hiding.
 
-| Type | Example |
-|---|---|
-| `private_key` | `-----BEGIN RSA PRIVATE KEY-----...` |
-| `jwt` | `eyJhbGc...payload...sig` |
-| `conn_string` | `postgres://admin:s3cret@db.internal.corp:5432/app` |
-| `bootstrap_servers` | `broker1:9092,broker2:9092,broker3:9092` |
-| `aws_access_key` | `AKIAIOSFODNN7EXAMPLE` |
-| `api_key` | OpenAI `sk-...`, GitHub `ghp_...`, Slack `xox...`, Google `AIza...` |
-| `bearer_token` | `Bearer eyJ...` |
-| `credential_kv` | `password=`, `pwd=`, `secret=`, `token=`, `username=` assignments |
-| `host_port` | `10.4.12.9:5432` |
-| `url` | any `scheme://...` string |
-| `hostname` | `broker-3.kafka.internal.corp` |
-| `ipv6` / `ipv4` | `10.4.12.9`, `fe80::1ff:fe23:4567:890a` |
+| Type | Category | Example |
+|---|---|---|
+| `private_key` | Credentials | `-----BEGIN RSA PRIVATE KEY-----...` |
+| `jwt` | Credentials | `eyJhbGc...payload...sig` |
+| `conn_string` | Credentials | `postgres://admin:s3cret@db.internal.corp:5432/app` |
+| `aws_access_key` | Credentials | `AKIAIOSFODNN7EXAMPLE` |
+| `api_key` | Credentials | OpenAI `sk-...`, GitHub `ghp_...`, Slack `xox...`, Google `AIza...` |
+| `bearer_token` | Credentials | `Bearer eyJ...` |
+| `credential_kv` | Credentials | `password=`, `pwd=`, `secret=`, `token=`, `username=` assignments |
+| `bootstrap_servers` | Infra | `broker1:9092,broker2:9092,broker3:9092` |
+| `host_port` | Infra | `10.4.12.9:5432` |
+| `url` | Infra | any `scheme://...` string |
+| `hostname` | Infra | `broker-3.kafka.internal.corp` |
+| `ipv6` / `ipv4` | Infra | `10.4.12.9`, `fe80::1ff:fe23:4567:890a` |
+| `credit_card` | PII | `4111111111111111` (Luhn-checksum validated, not just digit-counted) |
+| `ssn` | PII | `123-45-6789` |
+| `email` | PII | `jane.doe@example.com` |
+| `phone` | PII | `(415) 555-0132`, `+1 415-555-0132` |
+
+Each category (Credentials, Infra, PII) can be turned on or off independently from the
+extension's **Options** page (right-click the toolbar icon -> Options, or the "Options"
+button in the popup) - see [Options & settings](#options--settings) below.
 
 ## How it works
 
@@ -65,22 +76,43 @@ hostname/endpoint itself is usually what needs hiding.
    only; nothing is re-sent.
 6. Closing the tab clears everything.
 
+## Options & settings
+
+Everything is controlled from one place: the **Options** page (`src/options.html`,
+reachable from the popup's "Options" button, or right-click the toolbar icon ->
+Options). It persists to `chrome.storage.local` under a single `inframaskSettings`
+key, shared by the content script, popup, and background worker via `src/settings.js`
+so the storage shape only lives in one place.
+
+- **Masking enabled** - the master on/off switch (same toggle as the popup's).
+- **Credentials & secrets**, **Infrastructure identifiers**, **PII & retail-sensitive
+  data** - each category can be disabled independently. A disabled category's
+  detectors don't just get filtered out afterward - they never run at all for that
+  pass (see `detectAll(text, { categories })` in `src/detectors.js`), so turning off
+  PII scanning on a pure-infra team's machine also saves the matching work, not just
+  the masking.
+- Settings changes apply live to every open matching tab via
+  `chrome.storage.onChanged` - no reload needed.
+
 ## Project structure
 
 ```
-manifest.json          Manifest V3 config, content script matches
+manifest.json            Manifest V3 config, content script matches, options_page
 src/
-  detectors.js          Pure detection functions (no DOM) - the part that matters
-  token-store.js         In-memory + chrome.storage.session mirror
-  masking-engine.js      maskText() / unmaskText(), wraps detectors + token store
-  site-adapters.js       Per-site selectors (ChatGPT, Claude, Gemini)
-  content-script.js      DOM wiring: debounce, cursor preservation, MutationObserver
-  background.js          Badge count, enabled/disabled flag - sees no message content
-  popup.html / popup.js  Toggle + live token map for the active tab
-icons/                  Generated via scripts/make-icons.js (placeholder red icon)
+  settings.js             Settings shape, defaults, load/save - shared by every other file
+  detectors.js             Pure detection functions (no DOM), tagged by category
+  token-store.js           In-memory + chrome.storage.session mirror
+  masking-engine.js        maskText() / unmaskText(), wraps detectors + token store
+  site-adapters.js         Per-site selectors (ChatGPT, Claude, Gemini)
+  content-script.js        DOM wiring: debounce, cursor preservation, MutationObserver
+  background.js            Badge count, default settings on install - sees no message content
+  popup.html / popup.js    Quick toggle + live token map for the active tab
+  options.html / options.js Full settings page: master switch + per-category toggles
+icons/                    Generated via scripts/make-icons.js (padlock icon, no deps)
 tests/
-  detectors.test.js      Unit tests for every detector + overlap resolution
-  masking-engine.test.js Round-trip mask -> unmask tests
+  detectors.test.js        Unit tests for every detector, overlap resolution, categories
+  masking-engine.test.js   Round-trip mask -> unmask tests
+  settings.test.js         normalize()/defaults tests
 ```
 
 ## How to run
@@ -93,7 +125,8 @@ Load unpacked, no build step required:
    (e.g. `password=hunter2` or `broker1:9092,broker2:9092`) into the chat box, and
    confirm it is replaced with a `⟦...⟧` token before you hit send.
 3. Click the toolbar icon to see the live token map for the active tab, toggle
-   masking on/off, or clear the current tab's tokens.
+   masking on/off, or clear the current tab's tokens. Click "Options" for the full
+   settings page (per-category toggles).
 
 Run the detector/engine unit tests (Node's built-in test runner, no dependencies):
 
@@ -124,6 +157,16 @@ npm test
   next to it, and a keyword immediately followed by a JWT or API key gets classified
   as `credential_kv` rather than `jwt`/`api_key` (longest-match-wins picks the match
   that includes the label). Both still get masked; only the reported *type* differs.
-- No PII detectors (names, emails, SSNs, card numbers) — still a deliberate v1
-  non-goal per the original design, not an oversight.
+- PII detection is regex-based, not a trained classifier - `phone` requires
+  separators (`555-0132`, not `5550132`) to avoid flagging arbitrary 10-digit numbers,
+  and `credit_card` requires a full Luhn-checksum pass, not just the right digit
+  count, to avoid flagging order/tracking IDs of the same length. Both trade recall
+  for fewer false positives; a real card number with no separators and a typo that
+  still happens to pass Luhn is the kind of edge case that could slip through.
+- No detector for personal names, street addresses, or retailer-specific identifiers
+  (loyalty numbers, gift card codes) - formats vary too much per business to regex
+  reliably. `src/detectors.js` is the extension point if you need one for your own data.
 - Not yet published to the Chrome Web Store; "Load unpacked" only.
+- Still hardcoded to the three sites listed in `manifest.json`'s `content_scripts.matches`
+  and `src/site-adapters.js` - not a drop-in for an arbitrary chat UI. Adding a new site
+  means adding both a `matches` entry and a selector/adapter entry.

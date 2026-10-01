@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>InfraMask Settings</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 560px; margin: 24px auto; padding: 0 16px; color: #1a1a1a; }
+      h1 { display: flex; align-items: center; gap: 8px; font-size: 20px; }
+      h1 img { width: 28px; height: 28px; }
+      h2 { font-size: 14px; margin-top: 28px; margin-bottom: 4px; color: #444; }
+      .card { border: 1px solid #ddd; border-radius: 8px; padding: 14px 16px; margin-top: 10px; }
+      .option { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid #eee; }
+      .option:last-child { border-bottom: none; }
+      .option input { margin-top: 3px; }
+      .option .label { font-size: 13px; font-weight: 600; }
+      .option .desc { font-size: 12px; color: #666; margin-top: 2px; }
+      ul { font-size: 13px; padding-left: 20px; }
+      .status { font-size: 12px; color: #1a7f37; height: 16px; margin-top: 6px; }
+      footer { font-size: 11px; color: #888; margin-top: 32px; }
+    </style>
+  </head>
+  <body>
+    <h1><img src="../icons/icon128.png" alt="" />InfraMask Settings</h1>
+
+    <h2>Master switch</h2>
+    <div class="card">
+      <div class="option">
+        <input type="checkbox" id="enabledToggle" />
+        <div>
+          <div class="label">Masking enabled</div>
+          <div class="desc">Turn off to pause InfraMask everywhere without removing it.</div>
+        </div>
+      </div>
+    </div>
+
+    <h2>What to mask</h2>
+    <div class="card" id="categoryCard">
+      <div class="option">
+        <input type="checkbox" id="cat-credentials" />
+        <div>
+          <div class="label">Credentials &amp; secrets</div>
+          <div class="desc">Passwords, API keys, tokens, JWTs, private keys, database connection strings.</div>
+        </div>
+      </div>
+      <div class="option">
+        <input type="checkbox" id="cat-infra" />
+        <div>
+          <div class="label">Infrastructure identifiers</div>
+          <div class="desc">IP addresses, internal hostnames, Kafka bootstrap servers, URLs.</div>
+        </div>
+      </div>
+      <div class="option">
+        <input type="checkbox" id="cat-pii" />
+        <div>
+          <div class="label">PII &amp; retail-sensitive data</div>
+          <div class="desc">Email addresses, phone numbers, SSNs, credit/debit card numbers (checksum-validated).</div>
+        </div>
+      </div>
+    </div>
+    <div class="status" id="statusEl"></div>
+
+    <h2>Supported sites</h2>
+    <div class="card">
+      <ul>
+        <li>chatgpt.com / chat.openai.com</li>
+        <li>claude.ai</li>
+        <li>gemini.google.com</li>
+      </ul>
+      <div class="desc">
+        InfraMask only runs on these sites by design - it is not injected anywhere else.
+        Adding a new site means adding a selector entry in <code>src/site-adapters.js</code>.
+      </div>
+    </div>
+
+    <footer>InfraMask v<span id="versionEl"></span> - masking happens entirely in your browser; nothing is sent anywhere.</footer>
+
+    <script src="settings.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>

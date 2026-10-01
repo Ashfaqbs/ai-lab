@@ -4,19 +4,26 @@
     <meta charset="utf-8" />
     <style>
       body { font-family: system-ui, sans-serif; width: 280px; padding: 12px; }
-      h1 { font-size: 14px; margin: 0 0 8px; }
+      h1 { font-size: 14px; margin: 0 0 8px; display: flex; align-items: center; gap: 6px; }
+      h1 img { width: 18px; height: 18px; }
       label { display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
       #tokens { max-height: 160px; overflow-y: auto; font-size: 11px; border-top: 1px solid #ddd; padding-top: 6px; }
       #tokens div { padding: 2px 0; border-bottom: 1px dotted #eee; word-break: break-all; }
-      button { width: 100%; padding: 6px; font-size: 12px; margin-top: 8px; cursor: pointer; }
+      .row { display: flex; gap: 6px; margin-top: 8px; }
+      button, .link-btn { flex: 1; padding: 6px; font-size: 12px; cursor: pointer; }
+      .link-btn { background: none; border: 1px solid #ccc; border-radius: 4px; }
     </style>
   </head>
   <body>
-    <h1>InfraMask</h1>
+    <h1><img src="../icons/icon48.png" alt="" />InfraMask</h1>
     <label>Masking enabled <input type="checkbox" id="enabledToggle" /></label>
     <div id="status" style="font-size: 11px; color: #666;"></div>
     <div id="tokens"></div>
-    <button id="clearBtn">Clear this tab's tokens</button>
+    <div class="row">
+      <button id="clearBtn">Clear this tab</button>
+      <button id="optionsBtn" class="link-btn">Options</button>
+    </div>
+    <script src="settings.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

@@ -1,21 +1,33 @@
+const { loadSettings, saveSettings } = window.InfraMaskSettings;
+
 const enabledToggle = document.getElementById('enabledToggle');
 const statusEl = document.getElementById('status');
 const tokensEl = document.getElementById('tokens');
 const clearBtn = document.getElementById('clearBtn');
+const optionsBtn = document.getElementById('optionsBtn');
 
 let activeTabId = null;
 
-chrome.storage.local.get(['inframaskEnabled'], (res) => {
-  enabledToggle.checked = res.inframaskEnabled !== false;
+loadSettings((settings) => {
+  enabledToggle.checked = settings.enabled;
 });
 
 enabledToggle.addEventListener('change', () => {
-  chrome.storage.local.set({ inframaskEnabled: enabledToggle.checked });
+  loadSettings((settings) => {
+    saveSettings({ ...settings, enabled: enabledToggle.checked });
+  });
+});
+
+optionsBtn.addEventListener('click', () => {
+  chrome.runtime.openOptionsPage();
 });
 
 clearBtn.addEventListener('click', () => {
   if (activeTabId == null) return;
-  chrome.tabs.sendMessage(activeTabId, { type: 'inframask:clear' }, () => refresh());
+  chrome.tabs.sendMessage(activeTabId, { type: 'inframask:clear' }, () => {
+    void chrome.runtime.lastError; // mark as read so Chrome doesn't log an unchecked warning
+    refresh();
+  });
 });
 
 function refresh() {
@@ -28,8 +40,9 @@ function refresh() {
     activeTabId = tab.id;
     chrome.tabs.sendMessage(tab.id, { type: 'inframask:getTokens' }, (res) => {
       if (chrome.runtime.lastError || !res) {
+        void chrome.runtime.lastError; // mark as read so Chrome doesn't log an unchecked warning
         statusEl.textContent = 'Not an active AI chat tab (ChatGPT, Claude, or Gemini).';
-        tokensEl.innerHTML = '';
+        tokensEl.replaceChildren();
         return;
       }
       statusEl.textContent = `Site: ${res.site} — ${res.tokens.length} value(s) masked this session.`;

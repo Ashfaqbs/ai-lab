@@ -9,12 +9,13 @@ window.__inframaskContentScriptLoaded = true;
   const { findAdapterForHostname } = window.InfraMaskSiteAdapters;
   const { createTokenStore } = window.InfraMaskTokenStore;
   const { maskText, unmaskText, TOKEN_PATTERN } = window.InfraMaskEngine;
+  const { STORAGE_KEY, DEFAULT_SETTINGS, normalize, loadSettings } = window.InfraMaskSettings;
 
   const adapter = findAdapterForHostname(location.hostname);
   if (!adapter) return;
 
   const tokenStore = createTokenStore();
-  let enabled = true;
+  let settings = DEFAULT_SETTINGS;
   const DEBOUNCE_MS = 150;
   let debounceTimer = null;
   let inputEl = null;
@@ -28,7 +29,7 @@ window.__inframaskContentScriptLoaded = true;
     if (typeof chrome === 'undefined' || !chrome.runtime) return;
     chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       if (message?.type === 'inframask:getTokens') {
-        sendResponse({ tokens: tokenStore.entries(), enabled, site: adapter.name });
+        sendResponse({ tokens: tokenStore.entries(), enabled: settings.enabled, site: adapter.name });
       } else if (message?.type === 'inframask:clear') {
         tokenStore.clear();
         sendResponse({ ok: true });
@@ -37,13 +38,13 @@ window.__inframaskContentScriptLoaded = true;
   }
 
   function loadConfig() {
-    if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) return;
-    chrome.storage.local.get(['inframaskEnabled'], (res) => {
-      if (typeof res.inframaskEnabled === 'boolean') enabled = res.inframaskEnabled;
+    loadSettings((loaded) => {
+      settings = loaded;
     });
+    if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.onChanged) return;
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (area === 'local' && changes.inframaskEnabled) {
-        enabled = changes.inframaskEnabled.newValue;
+      if (area === 'local' && changes[STORAGE_KEY]) {
+        settings = normalize(changes[STORAGE_KEY].newValue);
       }
     });
   }
@@ -93,21 +94,21 @@ window.__inframaskContentScriptLoaded = true;
     if (!el || el === responseContainer) return;
     responseContainer = el.closest('main') || document.body;
     const respObserver = new MutationObserver((mutations) => {
-      if (!enabled) return;
+      if (!settings.enabled) return;
       mutations.forEach((m) => m.addedNodes.forEach((node) => unmaskNode(node)));
     });
     respObserver.observe(responseContainer, { childList: true, subtree: true, characterData: true });
   }
 
   function onInput() {
-    if (!enabled || !inputEl) return;
+    if (!settings.enabled || !inputEl) return;
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(runMask, DEBOUNCE_MS);
   }
 
   function runMask() {
     const original = inputEl.textContent;
-    const { text, changed, maskedCount } = maskText(original, tokenStore);
+    const { text, changed, maskedCount } = maskText(original, tokenStore, { categories: settings.categories });
     if (!changed) return;
 
     const caretOffset = getCaretCharOffset(inputEl);

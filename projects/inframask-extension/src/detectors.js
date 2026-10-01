@@ -9,43 +9,55 @@ if (typeof window !== 'undefined' && window.InfraMaskDetectors) {
   // already loaded in this page - skip re-declaring
 } else {
 (function () {
+
+// ---- Credentials & secrets ----
+
+const CREDENTIAL_KV = /\b(password|passwd|pwd|secret|api[_-]?key|access[_-]?key|token|auth|username|user(?:name)?)\s*[:=]\s*["']?([^\s"'&,;]{3,})["']?/gid;
+const AWS_ACCESS_KEY = /\b(AKIA|ASIA)[0-9A-Z]{16}\b/g;
+const PREFIXED_API_KEY = /\b(sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{36}|gho_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{20,}|xox[baprs]-[a-zA-Z0-9-]{10,}|AIza[0-9A-Za-z_-]{35})\b/g;
+const BEARER_TOKEN = /\bBearer\s+[a-zA-Z0-9\-._~+/]+=*/g;
+const JWT = /\beyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\b/g;
+const PRIVATE_KEY_BLOCK = /-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----[\s\S]+?-----END (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/g;
+const CONN_STRING_WITH_CREDS = /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqp|ftp|sftp|https?):\/\/[^\s:@/]+:[^\s:@/]+@[^\s"'<>]+/g;
+
+// ---- Infra identifiers ----
+
 const IPV4 = /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g;
-
 const IPV6 = /\b(?:[0-9a-fA-F]{1,4}:){2,7}[0-9a-fA-F]{0,4}(?:%[a-zA-Z0-9]+)?\b/g;
-
 // Internal-looking hostname/FQDN: at least one dot, plausible labels, not a bare number/version.
 const HOSTNAME = /\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+(?:internal|corp|local|svc|cluster\.local|[a-zA-Z]{2,})\b/g;
-
-// host:port pair (single)
 const HOST_PORT = /\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?:\d{2,5}\b/g;
-
 // Kafka-style bootstrap server list: 2+ host:port pairs comma-separated
 const BOOTSTRAP_SERVERS = /\b(?:[a-zA-Z0-9][a-zA-Z0-9.-]*:\d{2,5})(?:\s*,\s*[a-zA-Z0-9][a-zA-Z0-9.-]*:\d{2,5}){1,}\b/g;
-
 // scheme://[user[:pass]@]host[:port][/path]
 const URL_PATTERN = /\b[a-zA-Z][a-zA-Z0-9+.-]*:\/\/(?:[^\s@/]+@)?[^\s"'<>]+/g;
 
-// scheme://user:pass@host (DB connection strings, basic-auth URLs)
-const CONN_STRING_WITH_CREDS = /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqp|ftp|sftp|https?):\/\/[^\s:@/]+:[^\s:@/]+@[^\s"'<>]+/g;
+// ---- PII / retail-sensitive data ----
 
-// KEY=VALUE / KEY: VALUE credential assignments (password, secret, token, apikey, username, user)
-// Carries the 'd' flag so group indices are available - this detector masks only the VALUE
-// half, keeping the key literal (e.g. "password=⟦CRED_1⟧"), so the masked text still shows
-// what kind of secret was there without revealing it.
-const CREDENTIAL_KV = /\b(password|passwd|pwd|secret|api[_-]?key|access[_-]?key|token|auth|username|user(?:name)?)\s*[:=]\s*["']?([^\s"'&,;]{3,})["']?/gid;
+const EMAIL = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
+// North American-style phone numbers: (555) 123-4567, 555-123-4567, +1 555 123 4567, etc.
+const PHONE = /\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b/g;
+// US Social Security Number
+const SSN = /\b\d{3}-\d{2}-\d{4}\b/g;
+// Candidate card-number-shaped runs of digits (13-19 digits, optionally grouped with
+// spaces/dashes). Validated against the Luhn checksum before being accepted, so ordinary
+// numeric strings of the same length (order IDs, tracking numbers) aren't flagged.
+const CREDIT_CARD_CANDIDATE = /\b(?:\d[ -]?){13,19}\b/g;
 
-// AWS access key id
-const AWS_ACCESS_KEY = /\b(AKIA|ASIA)[0-9A-Z]{16}\b/g;
-
-// Common prefixed API key / token formats (OpenAI, GitHub, Slack, generic bearer)
-const PREFIXED_API_KEY = /\b(sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{36}|gho_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{20,}|xox[baprs]-[a-zA-Z0-9-]{10,}|AIza[0-9A-Za-z_-]{35})\b/g;
-
-const BEARER_TOKEN = /\bBearer\s+[a-zA-Z0-9\-._~+/]+=*/g;
-
-// JWT: header.payload.signature, each base64url
-const JWT = /\beyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\b/g;
-
-const PRIVATE_KEY_BLOCK = /-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----[\s\S]+?-----END (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/g;
+function luhnValid(digitsOnly) {
+  let sum = 0;
+  let double = false;
+  for (let i = digitsOnly.length - 1; i >= 0; i--) {
+    let n = digitsOnly.charCodeAt(i) - 48;
+    if (double) {
+      n *= 2;
+      if (n > 9) n -= 9;
+    }
+    sum += n;
+    double = !double;
+  }
+  return sum % 10 === 0;
+}
 
 function runGlobal(regex, text, type) {
   const matches = [];
@@ -85,33 +97,68 @@ function runCredentialKV(regex, text) {
   return matches;
 }
 
-// Detectors in priority order, most specific/highest-value first.
-// Order matters for tie-breaking when two matches have identical length.
+function runCreditCard(regex, text) {
+  const matches = [];
+  let m;
+  regex.lastIndex = 0;
+  while ((m = regex.exec(text)) !== null) {
+    const digitsOnly = m[0].replace(/[ -]/g, '');
+    if (digitsOnly.length >= 13 && digitsOnly.length <= 19 && luhnValid(digitsOnly)) {
+      const start = m.index;
+      const end = m.index + m[0].length;
+      matches.push({ type: 'credit_card', start, end, value: m[0], maskStart: start, maskEnd: end, maskValue: m[0] });
+    }
+    if (m[0].length === 0) regex.lastIndex++;
+  }
+  return matches;
+}
+
+// Detectors in priority order, most specific/highest-value first - order matters for
+// tie-breaking when two matches have identical length. Each entry is tagged with the
+// category it belongs to so a category can be turned off from the extension's options page
+// (see src/settings.js) without touching this list.
 const DETECTOR_ORDER = [
-  ['private_key', PRIVATE_KEY_BLOCK],
-  ['jwt', JWT],
-  ['conn_string', CONN_STRING_WITH_CREDS],
-  ['bootstrap_servers', BOOTSTRAP_SERVERS],
-  ['aws_access_key', AWS_ACCESS_KEY],
-  ['api_key', PREFIXED_API_KEY],
-  ['bearer_token', BEARER_TOKEN],
-  ['credential_kv', CREDENTIAL_KV],
-  ['host_port', HOST_PORT],
-  ['url', URL_PATTERN],
-  ['hostname', HOSTNAME],
-  ['ipv6', IPV6],
-  ['ipv4', IPV4],
+  ['private_key', PRIVATE_KEY_BLOCK, 'credentials'],
+  ['jwt', JWT, 'credentials'],
+  ['conn_string', CONN_STRING_WITH_CREDS, 'credentials'],
+  ['bootstrap_servers', BOOTSTRAP_SERVERS, 'infra'],
+  ['aws_access_key', AWS_ACCESS_KEY, 'credentials'],
+  ['api_key', PREFIXED_API_KEY, 'credentials'],
+  ['bearer_token', BEARER_TOKEN, 'credentials'],
+  ['credit_card', CREDIT_CARD_CANDIDATE, 'pii'],
+  ['ssn', SSN, 'pii'],
+  ['email', EMAIL, 'pii'],
+  ['phone', PHONE, 'pii'],
+  ['credential_kv', CREDENTIAL_KV, 'credentials'],
+  ['host_port', HOST_PORT, 'infra'],
+  ['url', URL_PATTERN, 'infra'],
+  ['hostname', HOSTNAME, 'infra'],
+  ['ipv6', IPV6, 'infra'],
+  ['ipv4', IPV4, 'infra'],
 ];
 
+const CATEGORIES = ['credentials', 'infra', 'pii'];
+
+function runDetector(type, regex, text) {
+  if (type === 'credential_kv') return runCredentialKV(regex, text);
+  if (type === 'credit_card') return runCreditCard(regex, text);
+  return runGlobal(regex, text, type);
+}
+
 /**
- * Runs every detector and resolves overlaps with longest-match-wins.
+ * Runs every enabled detector and resolves overlaps with longest-match-wins.
  * On equal length, the earlier entry in DETECTOR_ORDER wins (it is more specific).
+ *
+ * `options.categories`, when given, is an object like { credentials: true, infra: false,
+ * pii: true } - a category missing or not explicitly false is treated as enabled, so
+ * existing callers that pass no options keep detecting everything.
  */
-function detectAll(text) {
+function detectAll(text, options = {}) {
+  const categories = options.categories;
   const all = [];
-  DETECTOR_ORDER.forEach(([type, regex], priority) => {
-    const matches = type === 'credential_kv' ? runCredentialKV(regex, text) : runGlobal(regex, text, type);
-    matches.forEach((match) => all.push({ ...match, priority }));
+  DETECTOR_ORDER.forEach(([type, regex, category], priority) => {
+    if (categories && categories[category] === false) return;
+    runDetector(type, regex, text).forEach((match) => all.push({ ...match, priority }));
   });
 
   // Longest match wins; on a tie, the more specific detector (lower priority index) wins.
@@ -145,6 +192,7 @@ function detectAll(text) {
 const api = {
   detectAll,
   DETECTOR_ORDER,
+  CATEGORIES,
   patterns: {
     IPV4,
     IPV6,
@@ -159,6 +207,10 @@ const api = {
     BEARER_TOKEN,
     JWT,
     PRIVATE_KEY_BLOCK,
+    EMAIL,
+    PHONE,
+    SSN,
+    CREDIT_CARD_CANDIDATE,
   },
 };
 

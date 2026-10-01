@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "InfraMask",
-  "version": "0.1.0",
-  "description": "Masks secrets and infra identifiers (passwords, API keys, bootstrap servers, IPs) before they reach an AI chat UI, and restores them in the response view only.",
+  "version": "0.2.0",
+  "description": "Masks secrets, infra identifiers, and PII (passwords, API keys, bootstrap servers, card numbers, emails) before they reach an AI chat UI, and restores them in the response view only.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -15,6 +15,7 @@
     "default_popup": "src/popup.html",
     "default_title": "InfraMask"
   },
+  "options_page": "src/options.html",
   "permissions": ["storage"],
   "host_permissions": [],
   "content_scripts": [
@@ -26,6 +27,7 @@
         "https://gemini.google.com/*"
       ],
       "js": [
+        "src/settings.js",
         "src/detectors.js",
         "src/token-store.js",
         "src/masking-engine.js",

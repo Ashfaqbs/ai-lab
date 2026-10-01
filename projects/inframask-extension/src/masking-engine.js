@@ -22,9 +22,14 @@ function isAlreadyToken(value) {
  * for a key=value pair (credential_kv) that's just the value, so "password=hunter2" becomes
  * "password=⟦CRED_1⟧" rather than an opaque "⟦CRED_1⟧" that hides which field it was. Other
  * detector types have no separate key, so their mask range is the whole match.
+ *
+ * `options.categories` (see src/detectors.js) lets a category be skipped entirely, both so
+ * the extension's options page can turn off PII/infra/credential detection independently,
+ * and so a disabled category's regexes never even run - no point paying for detectors the
+ * user doesn't want.
  */
-function maskText(text, tokenStore) {
-  const matches = detectAll(text).filter((m) => !isAlreadyToken(m.value));
+function maskText(text, tokenStore, options = {}) {
+  const matches = detectAll(text, options).filter((m) => !isAlreadyToken(m.value));
   if (matches.length === 0) return { text, changed: false, maskedCount: 0 };
 
   // detectAll returns matches sorted left-to-right. Assign/reuse tokens in that reading

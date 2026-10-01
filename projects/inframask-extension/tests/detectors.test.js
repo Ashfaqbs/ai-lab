@@ -94,3 +94,57 @@ test('version numbers are not falsely flagged as IPv4', () => {
   const matches = detectAll('upgrade to v2.1 of the library');
   assert.equal(matches.some((m) => m.type === 'ipv4'), false);
 });
+
+test('detects an email address', () => {
+  const matches = detectAll('contact jane.doe@example.com for access');
+  assert.equal(matches.some((m) => m.type === 'email' && m.value === 'jane.doe@example.com'), true);
+});
+
+test('detects a North American phone number', () => {
+  const matches = detectAll('call me at (415) 555-0132 tomorrow');
+  assert.equal(matches.some((m) => m.type === 'phone'), true);
+});
+
+test('detects a US SSN', () => {
+  const matches = detectAll('ssn on file: 123-45-6789');
+  assert.equal(matches.some((m) => m.type === 'ssn' && m.value === '123-45-6789'), true);
+});
+
+test('detects a Luhn-valid credit card number', () => {
+  // 4111111111111111 is the standard Visa test number and passes the Luhn checksum
+  const matches = detectAll('card on file: 4111111111111111');
+  assert.equal(matches.some((m) => m.type === 'credit_card'), true);
+});
+
+test('does not flag a Luhn-invalid digit run as a credit card', () => {
+  // same length as a card number, but fails the checksum - e.g. an order/tracking id
+  const matches = detectAll('order id 1234567890123456');
+  assert.equal(matches.some((m) => m.type === 'credit_card'), false);
+});
+
+test('credential_kv masking keeps the key and masks only the value (detector level)', () => {
+  const matches = detectAll('password=hunter2');
+  const m = matches.find((x) => x.type === 'credential_kv');
+  assert.equal(m.maskValue, 'hunter2');
+  assert.equal(m.value, 'password=hunter2');
+});
+
+test('disabling the pii category skips email/phone/ssn/card detection', () => {
+  const text = 'email jane@example.com card 4111111111111111 ssn 123-45-6789';
+  const withPii = detectAll(text, { categories: { pii: true } });
+  const withoutPii = detectAll(text, { categories: { pii: false } });
+  assert.equal(withPii.some((m) => m.type === 'email'), true);
+  assert.equal(withoutPii.some((m) => ['email', 'credit_card', 'ssn'].includes(m.type)), false);
+});
+
+test('disabling the infra category skips IP/hostname/bootstrap detection', () => {
+  const text = 'connect to 10.4.12.9 and broker1:9092,broker2:9092';
+  const withoutInfra = detectAll(text, { categories: { infra: false } });
+  assert.equal(withoutInfra.length, 0);
+});
+
+test('categories option with no explicit entry defaults that category to enabled', () => {
+  // only "pii" is mentioned - credentials/infra should still run
+  const matches = detectAll('password=hunter2', { categories: { pii: false } });
+  assert.equal(matches.some((m) => m.type === 'credential_kv'), true);
+});

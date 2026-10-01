@@ -22,6 +22,10 @@ const TOKEN_LABELS = {
   hostname: 'HOST',
   ipv6: 'IP',
   ipv4: 'IP',
+  credit_card: 'CARD',
+  ssn: 'SSN',
+  email: 'EMAIL',
+  phone: 'PHONE',
 };
 
 function createTokenStore() {
