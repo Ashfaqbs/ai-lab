@@ -23,6 +23,14 @@ Each detector is a pure function (`text -> matches`), independently unit-tested,
 no DOM dependency. Overlapping matches resolve longest-match-wins, so a password
 embedded in a connection string is masked once as a connection string, not twice.
 
+`credential_kv` masks only the *value* half of a `key=value`/`key: value` pair, keeping
+the key literal: `password=hunter2` becomes `password=⟦CRED_1⟧`, not an opaque
+`⟦CRED_1⟧` that hides which field it was. This keeps the masked text traceable - you
+can tell it was a password, a username, or a token at a glance, without ever seeing
+the real value. Every other detector type (bootstrap servers, connection strings, API
+keys, etc.) masks the whole match, since there's no separate "key" to preserve and the
+hostname/endpoint itself is usually what needs hiding.
+
 | Type | Example |
 |---|---|
 | `private_key` | `-----BEGIN RSA PRIVATE KEY-----...` |

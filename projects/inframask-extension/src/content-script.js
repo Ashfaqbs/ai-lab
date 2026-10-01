@@ -1,5 +1,10 @@
 // Wires the Masking Engine and Unmask Observer to the live page DOM.
 // Runs as a content script, injected only on the hostnames listed in manifest.json.
+if (window.__inframaskContentScriptLoaded) {
+  // already running in this page (e.g. a stale re-injection after an extension reload) -
+  // a second copy would double-attach listeners and duplicate every mask, so skip it.
+} else {
+window.__inframaskContentScriptLoaded = true;
 (function () {
   const { findAdapterForHostname } = window.InfraMaskSiteAdapters;
   const { createTokenStore } = window.InfraMaskTokenStore;
@@ -44,13 +49,34 @@
   }
 
   function attachWhenReady() {
+    // Scanning the whole document on every mutation is wasteful once both anchors are
+    // found (ChatGPT streams dozens of DOM mutations per second while a response is being
+    // written). Stop watching as soon as both are attached; a fresh find-on-demand check
+    // runs only if one of them later disappears (e.g. the SPA swaps the composer).
     const observer = new MutationObserver(() => {
       tryAttachInput();
       tryAttachResponseObserver();
+      if (inputEl && responseContainer && document.body.contains(inputEl)) {
+        observer.disconnect();
+        watchForDetachment();
+      }
     });
     observer.observe(document.body, { childList: true, subtree: true });
     tryAttachInput();
     tryAttachResponseObserver();
+  }
+
+  // Lightweight fallback: if the attached input element is ever removed from the page
+  // (SPA navigation swapping the composer out), re-run the heavier whole-document search.
+  function watchForDetachment() {
+    const checkInterval = setInterval(() => {
+      if (!inputEl || !document.body.contains(inputEl)) {
+        clearInterval(checkInterval);
+        inputEl = null;
+        responseContainer = null;
+        attachWhenReady();
+      }
+    }, 2000);
   }
 
   function tryAttachInput() {
@@ -59,6 +85,7 @@
     inputEl = el;
     inputEl.addEventListener('input', onInput);
     inputEl.addEventListener('paste', () => setTimeout(() => onInput(), 0));
+    console.log('[InfraMask] attached to input box on', adapter.name);
   }
 
   function tryAttachResponseObserver() {
@@ -172,3 +199,4 @@
     sel.addRange(range);
   }
 })();
+}

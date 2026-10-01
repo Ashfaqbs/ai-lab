@@ -2,6 +2,10 @@
 // anywhere else. Selectors are best-effort and may need updating if a site's DOM changes
 // (see README "Known limitations").
 
+if (typeof window !== 'undefined' && window.InfraMaskSiteAdapters) {
+  // already loaded in this page - skip re-declaring
+} else {
+(function () {
 const SITE_ADAPTERS = [
   {
     name: 'chatgpt',
@@ -33,4 +37,6 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = api;
 } else {
   window.InfraMaskSiteAdapters = api;
+}
+})();
 }

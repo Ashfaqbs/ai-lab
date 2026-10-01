@@ -37,3 +37,16 @@ test('unmaskText leaves unknown tokens untouched', () => {
   const result = unmaskText('value is ⟦IP_99⟧ unknown', store);
   assert.equal(result, 'value is ⟦IP_99⟧ unknown');
 });
+
+test('credential_kv masking keeps the key literal and only tokenizes the value', () => {
+  const store = createTokenStore();
+  const { text } = maskText('password=hunter2', store);
+  assert.equal(text, 'password=⟦CRED_1⟧');
+  assert.equal(unmaskText(text, store), 'password=hunter2');
+});
+
+test('credential_kv masking is traceable for multiple distinct keys', () => {
+  const store = createTokenStore();
+  const { text } = maskText('username=jdoe password=hunter2', store);
+  assert.equal(text, 'username=⟦CRED_1⟧ password=⟦CRED_2⟧');
+});

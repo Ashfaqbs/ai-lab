@@ -4,6 +4,10 @@
 // synchronous masking path; chrome.storage.session is best-effort and never read back
 // into the hot path, so a slow/failed storage write never blocks typing.
 
+if (typeof window !== 'undefined' && window.InfraMaskTokenStore) {
+  // already loaded in this page - skip re-declaring
+} else {
+(function () {
 const TOKEN_LABELS = {
   private_key: 'PRIVATEKEY',
   jwt: 'JWT',
@@ -91,4 +95,6 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = api;
 } else {
   window.InfraMaskTokenStore = api;
+}
+})();
 }
