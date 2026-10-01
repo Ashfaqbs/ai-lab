@@ -26,6 +26,10 @@ design, and Model Context Protocol (MCP) servers among them.
   - [`mcp-server-design-lessons`](designs/mcp-server-design-lessons/README.md) — the
     generalized, Grafana-agnostic checklist distilled from that review, for building a
     different MCP server from scratch.
+  - [`shipyard-platform`](designs/shipyard-platform/README.md) — Shipyard, a self-hosted
+    prompt-to-deployed-app platform: a user prompt drives an agent that writes and runs a
+    full-stack codebase inside an isolated per-session Kubernetes sandbox, with live preview
+    and an explicit, audited deploy-to-Kubernetes tool call.
 - **`projects/`** — actual working code.
   - [`docker-copilot`](projects/docker-copilot/README.md) — a human-in-the-loop chat agent
     for observing and managing local Docker containers: free read access, every
