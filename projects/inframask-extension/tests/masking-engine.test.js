@@ -50,3 +50,26 @@ test('credential_kv masking is traceable for multiple distinct keys', () => {
   const { text } = maskText('username=jdoe password=hunter2', store);
   assert.equal(text, 'username=⟦CRED_1⟧ password=⟦CRED_2⟧');
 });
+
+test('masks a pasted .properties block, keeping key names literal', () => {
+  const store = createTokenStore();
+  const input = [
+    'db.host=db.prod.internal.corp',
+    'db.username=admin',
+    'db.password=hunter2',
+    'spring.kafka.bootstrap-servers=broker1:9092,broker2:9092',
+  ].join('\n');
+  const { text } = maskText(input, store);
+  const lines = text.split('\n');
+  assert.match(lines[0], /^db\.host=⟦HOST_\d+⟧$/);
+  assert.match(lines[1], /^db\.username=⟦CRED_\d+⟧$/);
+  assert.match(lines[2], /^db\.password=⟦CRED_\d+⟧$/);
+  assert.match(lines[3], /^spring\.kafka\.bootstrap-servers=⟦BOOTSTRAP_\d+⟧$/);
+});
+
+test('masks a pasted YAML block, keeping keys and indentation literal', () => {
+  const store = createTokenStore();
+  const input = 'database:\n  host: db.prod.internal.corp\n  username: admin\n  password: hunter2\n  port: 5432';
+  const { text } = maskText(input, store);
+  assert.match(text, /database:\n {2}host: ⟦HOST_\d+⟧\n {2}username: ⟦CRED_\d+⟧\n {2}password: ⟦CRED_\d+⟧\n {2}port: 5432/);
+});

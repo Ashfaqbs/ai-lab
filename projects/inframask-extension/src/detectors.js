@@ -24,8 +24,15 @@ const CONN_STRING_WITH_CREDS = /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|red
 
 const IPV4 = /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g;
 const IPV6 = /\b(?:[0-9a-fA-F]{1,4}:){2,7}[0-9a-fA-F]{0,4}(?:%[a-zA-Z0-9]+)?\b/g;
-// Internal-looking hostname/FQDN: at least one dot, plausible labels, not a bare number/version.
-const HOSTNAME = /\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+(?:internal|corp|local|svc|cluster\.local|[a-zA-Z]{2,})\b/g;
+// Internal-looking hostname/FQDN: at least one dot, plausible labels, ending in either an
+// internal-infra-sounding suffix or a real, common public TLD. The final segment used to
+// accept ANY 2+-letter word, which meant dotted config/property KEY NAMES like "db.host" or
+// "spring.kafka.bootstrap-servers" (pasted straight from a .properties file) got masked as
+// if they were hostnames themselves - not even a value, just the key. A curated suffix list
+// trades a little recall (an unusual real TLD might be missed) for not mangling ordinary
+// dotted identifiers that aren't hostnames at all.
+const HOSTNAME =
+  /\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+(?:internal|corp|local|svc|cluster\.local|com|net|org|io|dev|ai|co|gov|edu|app|cloud)\b/g;
 const HOST_PORT = /\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?:\d{2,5}\b/g;
 // Kafka-style bootstrap server list: 2+ host:port pairs comma-separated
 const BOOTSTRAP_SERVERS = /\b(?:[a-zA-Z0-9][a-zA-Z0-9.-]*:\d{2,5})(?:\s*,\s*[a-zA-Z0-9][a-zA-Z0-9.-]*:\d{2,5}){1,}\b/g;

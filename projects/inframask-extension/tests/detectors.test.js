@@ -143,6 +143,19 @@ test('disabling the infra category skips IP/hostname/bootstrap detection', () =>
   assert.equal(withoutInfra.length, 0);
 });
 
+test('does not flag a dotted config property key as a hostname', () => {
+  // "db.host" and "spring.kafka.bootstrap-servers" are property KEYS from a pasted
+  // .properties file, not hostnames - only their values should ever be masked.
+  const matches = detectAll('db.host=db.prod.internal.corp');
+  assert.equal(matches.some((m) => m.value === 'db.host'), false);
+  assert.equal(matches.some((m) => m.type === 'hostname' && m.value === 'db.prod.internal.corp'), true);
+});
+
+test('still detects a real public hostname', () => {
+  const matches = detectAll('connect to api.example.com please');
+  assert.equal(matches.some((m) => m.type === 'hostname' && m.value === 'api.example.com'), true);
+});
+
 test('categories option with no explicit entry defaults that category to enabled', () => {
   // only "pii" is mentioned - credentials/infra should still run
   const matches = detectAll('password=hunter2', { categories: { pii: false } });

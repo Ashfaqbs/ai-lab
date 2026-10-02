@@ -190,6 +190,21 @@ npm test
   next to it, and a keyword immediately followed by a JWT or API key gets classified
   as `credential_kv` rather than `jwt`/`api_key` (longest-match-wins picks the match
   that includes the label). Both still get masked; only the reported *type* differs.
+- All detectors are regex-based and only recognize `key: value` or `key=value` syntax
+  (YAML, `.properties`, JSON-like, env-style) - this covers pasting straight from config
+  files, which is the primary case this was built for. It does **not** catch a secret
+  described in free-form prose with no separator, e.g. "the password is hunter2" or
+  "my SASL username is admin" - there's no reliable regex for that without a much
+  higher false-positive rate, and it would need an NLP-based approach to do properly.
+  If your team pastes secrets as prose rather than key/value pairs, this won't catch it.
+- Earlier versions of the `hostname` detector accepted any 2+-letter final segment as a
+  plausible TLD, which meant a dotted config *key name* like `db.host` or
+  `spring.kafka.bootstrap-servers` (common in a pasted `.properties` file) got masked as
+  if it were a hostname itself - not even a value, just the key. Fixed by requiring the
+  final segment to be either an internal-infra suffix (`internal`, `corp`, `local`,
+  `svc`, `cluster.local`) or a curated list of common public TLDs (`com`, `net`, `org`,
+  `io`, `dev`, `ai`, `co`, `gov`, `edu`, `app`, `cloud`) - trades a little recall on
+  unusual TLDs for not mangling ordinary property keys that aren't hostnames at all.
 - PII detection is regex-based, not a trained classifier - `phone` requires
   separators (`555-0132`, not `5550132`) to avoid flagging arbitrary 10-digit numbers,
   and `credit_card` requires a full Luhn-checksum pass, not just the right digit
