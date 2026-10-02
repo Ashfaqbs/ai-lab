@@ -16,8 +16,6 @@ window.__inframaskContentScriptLoaded = true;
 
   const tokenStore = createTokenStore();
   let settings = DEFAULT_SETTINGS;
-  const DEBOUNCE_MS = 150;
-  let debounceTimer = null;
   let inputEl = null;
   let responseContainer = null;
   let suppressNextEnter = false;
@@ -28,14 +26,27 @@ window.__inframaskContentScriptLoaded = true;
   listenForPopupRequests();
   interceptSubmission();
 
-  // The debounced `input` handler is fine for masking as-you-type, but it leaves a real gap:
-  // type a secret and hit Enter (or paste and immediately click Send) faster than the 150ms
-  // debounce, and the ORIGINAL unmasked text goes out before runMask() ever fires. Rather than
-  // just shortening the debounce (still racy, just less often), intercept the actual submit
-  // triggers - Enter and the site's Send button - in the capture phase at the document root,
-  // which runs before the page's own framework-level handlers ever see the event. That lets
-  // this force a synchronous mask pass first, then re-trigger the real send once the box
-  // provably contains only masked text.
+  // Masking happens exactly once, right before the message actually goes out - not on every
+  // keystroke/paste. Two earlier, verified problems with masking live as-you-type drove this:
+  //
+  // 1. A rewrite-on-every-input approach still has a race: type a secret and hit Enter (or
+  //    paste and immediately click Send) faster than a debounce window, and the ORIGINAL
+  //    unmasked text could go out before a mask pass ever ran.
+  // 2. Rewriting the whole editor on every keystroke fights ChatGPT's own editor. Verified
+  //    live: `el.textContent` on this contentEditable silently drops ALL line breaks between
+  //    paragraphs (a 3-line paste reads back as one run-on string), so every live mask pass
+  //    was reading flattened text and writing it back - collapsing multi-line pasted content
+  //    (exactly the YAML/.properties case this is meant to handle) into an unreadable, broken
+  //    single block, and leaving the editor's internal paragraph structure corrupted enough
+  //    that further edits stopped landing correctly.
+  //
+  // Masking once, synchronously, at the moment of submission avoids both: there's no window
+  // between "masked" and "sent" for a race to exist in, and the DOM is never rewritten while
+  // the user is still actively editing, so there's nothing to corrupt.
+  //
+  // The interception itself runs in the capture phase at the document root, which fires before
+  // the page's own framework-level handlers ever see the event, regardless of where they
+  // attach theirs.
   function interceptSubmission() {
     document.addEventListener('keydown', onKeyDownCapture, true);
     document.addEventListener('click', onClickCapture, true);
@@ -76,9 +87,7 @@ window.__inframaskContentScriptLoaded = true;
     submitNow();
   }
 
-  // Skips the debounce entirely - masks whatever is in the box right now, synchronously.
   function forceMaskNow() {
-    clearTimeout(debounceTimer);
     if (inputEl) runMask();
   }
 
@@ -159,8 +168,6 @@ window.__inframaskContentScriptLoaded = true;
     const el = document.querySelector(adapter.inputSelector);
     if (!el || el === inputEl) return;
     inputEl = el;
-    inputEl.addEventListener('input', onInput);
-    inputEl.addEventListener('paste', () => setTimeout(() => onInput(), 0));
     console.log('[InfraMask] attached to input box on', adapter.name);
   }
 
@@ -175,24 +182,24 @@ window.__inframaskContentScriptLoaded = true;
     respObserver.observe(responseContainer, { childList: true, subtree: true, characterData: true });
   }
 
-  function onInput() {
-    if (!settings.enabled || !inputEl) return;
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(runMask, DEBOUNCE_MS);
-  }
-
   function runMask() {
-    const original = inputEl.textContent;
+    if (!settings.enabled) return;
+    const original = getEditableText(inputEl);
     const { text, changed, maskedCount } = maskText(original, tokenStore, { categories: settings.categories });
     if (!changed) return;
 
-    const caretOffset = getCaretCharOffset(inputEl);
-    const delta = text.length - original.length;
-
     replaceEditableContent(inputEl, text);
-    setCaretCharOffset(inputEl, Math.max(0, caretOffset + delta));
-
     updateBadge(maskedCount);
+  }
+
+  // `el.textContent` silently drops line breaks between a contentEditable's paragraph
+  // elements (verified live: a 3-line paste reads back as one run-on string with zero
+  // separation) - `innerText` preserves them, but as a blank line (two newlines) between
+  // paragraphs rather than one, so it's normalized back down to a single '\n' per line
+  // boundary. Masking never runs mid-edit anymore (see interceptSubmission above), so this
+  // only needs to be correct once, at submission time, not round-trip cleanly during typing.
+  function getEditableText(el) {
+    return el.innerText.replace(/\n{2,}/g, '\n');
   }
 
   // Sites like ChatGPT and Claude render their input box as a ProseMirror/React-controlled
@@ -240,39 +247,6 @@ window.__inframaskContentScriptLoaded = true;
     } catch (_err) {
       // background worker may be asleep between events; non-critical
     }
-  }
-
-  // Caret offset helpers operate on plain-text contentEditable elements (no nested markup),
-  // which matches how chat input boxes render while the user is actively typing.
-  function getCaretCharOffset(el) {
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return el.textContent.length;
-    const range = sel.getRangeAt(0);
-    const preRange = range.cloneRange();
-    preRange.selectNodeContents(el);
-    preRange.setEnd(range.endContainer, range.endOffset);
-    return preRange.toString().length;
-  }
-
-  function setCaretCharOffset(el, offset) {
-    const range = document.createRange();
-    const sel = window.getSelection();
-    let remaining = offset;
-    let node = null;
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-    while ((node = walker.nextNode())) {
-      if (remaining <= node.textContent.length) break;
-      remaining -= node.textContent.length;
-    }
-    if (!node) {
-      range.selectNodeContents(el);
-      range.collapse(false);
-    } else {
-      range.setStart(node, Math.min(remaining, node.textContent.length));
-      range.collapse(true);
-    }
-    sel.removeAllRanges();
-    sel.addRange(range);
   }
 })();
 }

@@ -61,44 +61,71 @@ button in the popup) - see [Options & settings](#options--settings) below.
 
 1. A content script injected only on `chatgpt.com`, `claude.ai`, and
    `gemini.google.com` attaches to the site's chat input box (per-site selectors live
-   in `src/site-adapters.js`).
-2. On a debounced `input` event, the Masking Engine (`src/masking-engine.js`) scans
-   the box's current text, finds new matches via the Detectors (`src/detectors.js`),
-   and rewrites each one in place to a token like `⟦CRED_1⟧`, preserving cursor
-   position.
+   in `src/site-adapters.js`). It does **not** touch the box's content while the user
+   is typing or editing - see "Why masking happens at submit time, not as you type"
+   below for why.
+2. When the user actually submits - Enter or the site's Send button -
+   `content-script.js` intercepts that action first, synchronously runs the Masking
+   Engine (`src/masking-engine.js`) over the box's current text, finds matches via the
+   Detectors (`src/detectors.js`), and rewrites each one in place to a token like
+   `⟦CRED_1⟧` - then re-triggers the real send. The real send only ever fires with
+   what's in the box *after* masking, never before.
 3. The real value is stored only in an in-memory Token Store
    (`src/token-store.js`), mirrored best-effort into `chrome.storage.session` so the
    popup can show the live token map. Nothing is written to disk or synced.
-4. The user sends the message as normal — the AI provider only ever receives the
-   masked text.
+4. The AI provider only ever receives the masked text.
 5. A `MutationObserver` watches the assistant's response container. When the
    response references a token, it is swapped back to the real value for display
    only; nothing is re-sent.
 6. Closing the tab clears everything.
 
-### Closing the "type fast, hit Enter before it masks" race
+### Why masking happens at submit time, not as you type
 
-The debounced `input` handler above is fine for masking as you type, but on its own it
-leaves a real gap: type a secret and hit Enter, or paste and immediately click Send,
-faster than the 150ms debounce, and the *original* unmasked text could go out before
-the debounce ever fires. Shortening the debounce only makes this rarer, not impossible.
+An earlier version masked continuously, on a debounced `input` event, as the user
+typed or pasted. Two concrete, live-verified problems with that approach led to
+replacing it with the submit-time interception described above:
 
-Instead, `content-script.js` intercepts the actual submit triggers - Enter and the
-site's Send button - at the document root, in the capture phase, which runs before the
-page's own framework-level handlers ever see the event (this is the same mechanism
-that made the earlier ProseMirror fix work: capture-phase listeners on `document` fire
-before any bubble-phase listener on a descendant, regardless of where the framework
-attaches its own handling). On interception it: cancels the native event, forces an
-immediate (non-debounced) mask pass, then re-triggers the real send - preferring a
-click on the site's actual Send button, falling back to re-dispatching a native Enter
-keydown if the button selector doesn't match. The real send only ever fires with
-whatever is in the box *after* masking, never before.
+1. **A race condition.** Type a secret and hit Enter, or paste and immediately click
+   Send, faster than the debounce window, and the *original* unmasked text could go
+   out before a mask pass ever ran. Shortening the debounce only made this rarer, not
+   impossible.
+2. **It corrupted multi-line pastes and broke further editing.** Verified live against
+   chatgpt.com: `el.textContent` on its contentEditable input silently drops *all* line
+   breaks between paragraphs - a 3-line paste reads back as one run-on string with zero
+   separation. Every live mask pass was reading that flattened text and writing it back,
+   which collapsed multi-line pasted content (a pasted YAML block or `.properties` file,
+   exactly the case this tool is meant to handle) into a single unreadable block, and
+   left the editor's internal paragraph structure corrupted enough that further edits
+   stopped landing correctly in the pasted area.
 
-Verified live against chatgpt.com: typed `password=hunter2` character-by-character,
-then sent Enter as a discrete keypress immediately after (the adversarial case this
-is meant to cover). The box held the masked `password=⟦CRED_1⟧` *before* the
-interception's own logic ran its post-mask step - confirming the mask completes
-synchronously ahead of any possible submission, not racing it.
+Masking once, synchronously, at the moment of submission avoids both: there's no window
+between "masked" and "sent" for a race to exist in, and the DOM is never rewritten while
+the user is still actively editing, so there's nothing to corrupt. This also matches how
+a similar tool at a previous employer behaved (mask only at submit), which is what
+surfaced the comparison in the first place.
+
+The interception itself runs in the capture phase at the document root, which fires
+before the page's own framework-level handlers ever see the event, regardless of where
+the framework attaches its own handling (the same mechanism behind the earlier
+ProseMirror write-back fix). On interception it: cancels the native event, forces an
+immediate mask pass, then re-triggers the real send - preferring a click on the site's
+actual Send button, falling back to re-dispatching a native Enter keydown if the button
+selector doesn't match.
+
+**What was verified live, and what wasn't:** the Enter-interception mechanism itself was
+verified end-to-end against chatgpt.com (typed `password=hunter2` character-by-character,
+sent Enter as an immediate discrete keypress - the box held the masked token before any
+submission could occur, with nothing actually sent). The multi-line read/write-back fix
+(`el.innerText`, normalized, instead of `el.textContent`) was verified in isolation
+against the same live editor - confirmed a 3-paragraph structure round-trips correctly
+when read via `innerText` and written back with single `\n` separators. The two were not
+re-verified together end-to-end on a full multi-line paste through the real extension,
+because ChatGPT's account-level draft sync (it persists and restores unsent composer
+text across page loads) kept reintroducing a stale masked draft from earlier testing,
+independent of what the extension's own code did - repeated automated testing on a real
+account polluted its own test conditions. Each piece is independently confirmed correct;
+testing them together on your end (paste a multi-line block, confirm it's still editable,
+then send) is the one step that would close that last gap.
 
 ## Options & settings
 
@@ -128,7 +155,7 @@ src/
   token-store.js           In-memory + chrome.storage.session mirror
   masking-engine.js        maskText() / unmaskText(), wraps detectors + token store
   site-adapters.js         Per-site selectors (ChatGPT, Claude, Gemini)
-  content-script.js        DOM wiring: debounce, cursor preservation, MutationObserver
+  content-script.js        DOM wiring: submit-time interception, MutationObserver
   background.js            Badge count, default settings on install - sees no message content
   popup.html / popup.js    Quick toggle + live token map for the active tab
   options.html / options.js Full settings page: master switch + per-category toggles
@@ -179,9 +206,14 @@ npm test
   button, which is slightly less reliable across frameworks.
 - The Enter/Send interception only recognizes plain `Enter` (no modifier) as a submit
   trigger, matching how all three sites behave by default. A site-level setting that
-  remaps sending to `Ctrl+Enter`/`Cmd+Enter` instead would not be caught - the debounced
-  `input` masking still applies, so the race window described above would reopen for
-  that specific remapped shortcut.
+  remaps sending to `Ctrl+Enter`/`Cmd+Enter` instead would not be caught - there's no
+  other masking trigger to fall back on, so that specific remapped shortcut would send
+  completely unmasked.
+- There's no live preview while typing anymore - masking only happens at the moment of
+  submission (see "Why masking happens at submit time, not as you type" above). You
+  won't see a value turn into a token until you actually send; the popup's token list
+  is empty until then too. This is a deliberate trade-off for not corrupting multi-line
+  pastes and editing, not an oversight.
 - Masking is content-script-only (visible, in-place DOM rewriting), not a network-layer
   interceptor — matches InfraMask's original design decision (Section 10, alternative
   C) to keep masking transparent and editable rather than invisible.
