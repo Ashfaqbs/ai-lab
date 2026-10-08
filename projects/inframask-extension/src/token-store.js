@@ -28,6 +28,14 @@ const TOKEN_LABELS = {
   phone: 'PHONE',
 };
 
+// A tab's content script (and its TokenStore) stays alive across an SPA's client-side
+// navigations - switching conversations never reloads the page, so nothing ever clears
+// the map on its own. Over a long-running tab that masks many distinct secrets across many
+// conversations, this would otherwise grow without bound. Capping it and dropping the
+// oldest entries first keeps memory flat; losing the ability to unmask a very old, no-longer
+// -visible token is an acceptable trade-off for not leaking memory for the life of the tab.
+const MAX_TOKENS = 2000;
+
 function createTokenStore() {
   const valueToToken = new Map();
   const tokenToValue = new Map();
@@ -42,6 +50,14 @@ function createTokenStore() {
   function tokenFor(type, value) {
     const existing = valueToToken.get(value);
     if (existing) return existing;
+
+    if (valueToToken.size >= MAX_TOKENS) {
+      // Map iteration order is insertion order, so the first key is the oldest entry.
+      const oldestValue = valueToToken.keys().next().value;
+      const oldestToken = valueToToken.get(oldestValue);
+      valueToToken.delete(oldestValue);
+      tokenToValue.delete(oldestToken);
+    }
 
     const token = nextLabel(type);
     valueToToken.set(value, token);

@@ -156,6 +156,20 @@ test('still detects a real public hostname', () => {
   assert.equal(matches.some((m) => m.type === 'hostname' && m.value === 'api.example.com'), true);
 });
 
+test('credential_kv captures a quoted multi-word value instead of truncating at the first space', () => {
+  // unquoted values must stop at whitespace (there's no other boundary), but a quoted value
+  // has an explicit end marker, so a passphrase containing spaces should come through whole.
+  const matches = detectAll('password: "hunter 2 trooper" is set');
+  const m = matches.find((x) => x.type === 'credential_kv');
+  assert.equal(m.maskValue, 'hunter 2 trooper');
+});
+
+test('credential_kv supports single-quoted multi-word values too', () => {
+  const matches = detectAll("password: 'hunter 2 trooper' is set");
+  const m = matches.find((x) => x.type === 'credential_kv');
+  assert.equal(m.maskValue, 'hunter 2 trooper');
+});
+
 test('categories option with no explicit entry defaults that category to enabled', () => {
   // only "pii" is mentioned - credentials/infra should still run
   const matches = detectAll('password=hunter2', { categories: { pii: false } });

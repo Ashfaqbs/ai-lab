@@ -19,17 +19,27 @@ const SITE_ADAPTERS = [
     name: 'claude',
     hostnames: ['claude.ai'],
     inputSelector: 'div[contenteditable="true"][enterkeyhint], div.ProseMirror[contenteditable="true"]',
-    responseContainerSelector: '[data-testid="user-message"] ~ div, .font-claude-message',
-    // Not live-verified (see README "Known limitations") - if Enter-to-send stops being
-    // caught on claude.ai, this selector is the first thing to check.
+    // Verified live against an existing claude.ai conversation (the old selector,
+    // '[data-testid="user-message"] ~ div, .font-claude-message', matched zero elements -
+    // assistant replies were never getting unmasked back to their real values).
+    responseContainerSelector: '[data-testid="assistant-message"]',
+    // Verified live against claude.ai: input selector matches exactly one element, and the
+    // send button's disabled/ready check correctly flips once the composer has text.
     sendButtonSelector: 'button[aria-label="Send Message"], button[aria-label="Send message"]',
   },
   {
     name: 'gemini',
     hostnames: ['gemini.google.com'],
-    inputSelector: 'rich-textarea div[contenteditable="true"]',
+    // Gemini's composer is built on Quill, which keeps a second, off-screen
+    // contenteditable (class "ql-clipboard") as an internal paste buffer - it matches this
+    // selector too, so it's excluded explicitly rather than relying on DOM order or the
+    // generic focused-element fallback in content-script.js's resolveComposer() to skip it.
+    inputSelector: 'rich-textarea div[contenteditable="true"]:not(.ql-clipboard)',
+    // Verified live against an existing gemini.google.com conversation - matches real
+    // assistant-reply elements.
     responseContainerSelector: 'message-content',
-    // Not live-verified (see README "Known limitations").
+    // Verified live against gemini.google.com: input, send button ("Send message", only
+    // rendered once the composer has text), and this disabled/ready check all confirmed.
     sendButtonSelector: 'button[aria-label="Send message"]',
   },
 ];

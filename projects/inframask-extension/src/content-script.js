@@ -54,7 +54,16 @@ window.__inframaskContentScriptLoaded = true;
 
   function onKeyDownCapture(e) {
     if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
-    if (!inputEl || e.target !== inputEl) return;
+    const isComposer = isComposerTarget(e.target);
+    // Temporary diagnostic log - shows exactly why interception did or didn't fire for this
+    // Enter press. Remove once the "sent unmasked" bug is confirmed fixed.
+    console.log('[InfraMask] Enter captured', {
+      isComposer,
+      targetTag: e.target && e.target.tagName,
+      settingsEnabled: settings.enabled,
+      suppressNextEnter,
+    });
+    if (!isComposer) return;
     if (suppressNextEnter) {
       suppressNextEnter = false;
       return;
@@ -65,6 +74,7 @@ window.__inframaskContentScriptLoaded = true;
     e.stopPropagation();
     e.stopImmediatePropagation();
 
+    console.log('[InfraMask] masking and resubmitting now');
     forceMaskNow();
     submitNow();
   }
@@ -73,6 +83,7 @@ window.__inframaskContentScriptLoaded = true;
     if (!adapter.sendButtonSelector) return;
     const sendBtn = e.target.closest(adapter.sendButtonSelector);
     if (!sendBtn) return;
+    console.log('[InfraMask] send button click captured', { suppressNextSendClick, settingsEnabled: settings.enabled });
     if (suppressNextSendClick) {
       suppressNextSendClick = false;
       return;
@@ -83,8 +94,51 @@ window.__inframaskContentScriptLoaded = true;
     e.stopPropagation();
     e.stopImmediatePropagation();
 
+    console.log('[InfraMask] masking and resubmitting now (button click)');
+
+    // A send-button click doesn't carry the composer as e.target, so `inputEl` could still
+    // be a stale reference here - refresh it from the live DOM before masking.
+    const liveInput = resolveComposer();
+    if (liveInput) inputEl = liveInput;
+
     forceMaskNow();
     submitNow();
+  }
+
+  // `adapter.inputSelector` is a comma-separated selector list (e.g. ChatGPT's
+  // '#prompt-textarea, form [contenteditable="true"]"); a plain querySelector just returns
+  // the first DOM-order match, which can be the WRONG box when the page has more than one
+  // element matching it at once - e.g. an inline "edit previous message" contenteditable
+  // sitting earlier in the DOM than the real composer. Preferring whichever match currently
+  // has focus (or contains the focused node) makes this unambiguous: the user can only be
+  // typing into one element at a time, and that's always the one we want.
+  function resolveComposer() {
+    const candidates = document.querySelectorAll(adapter.inputSelector);
+    if (candidates.length === 0) return null;
+    const active = document.activeElement;
+    for (const candidate of candidates) {
+      if (candidate === active || (active && candidate.contains(active))) return candidate;
+    }
+    for (const candidate of candidates) {
+      if (candidate.offsetParent !== null) return candidate;
+    }
+    return candidates[0];
+  }
+
+  // Checking `e.target === inputEl` by strict reference used to leave a window where a
+  // stale cached `inputEl` (the composer's DOM node was swapped by an SPA re-render) made
+  // this function return without ever calling preventDefault() - so the REAL, unmasked
+  // Enter keydown fell through to the page's own handler untouched. `watchForDetachment`
+  // only re-scans every 2s, so a swap could silently bypass masking for up to that long.
+  // Matching the live event target against the adapter's selector directly - and adopting
+  // it as the new `inputEl` when it differs - closes that window: there's no reliance on a
+  // cached reference staying fresh, and the cache self-heals on the very next keystroke.
+  function isComposerTarget(target) {
+    if (!(target instanceof Element)) return false;
+    const match = target.closest(adapter.inputSelector);
+    if (!match) return false;
+    if (match !== inputEl) inputEl = match;
+    return true;
   }
 
   function forceMaskNow() {
@@ -165,7 +219,7 @@ window.__inframaskContentScriptLoaded = true;
   }
 
   function tryAttachInput() {
-    const el = document.querySelector(adapter.inputSelector);
+    const el = resolveComposer();
     if (!el || el === inputEl) return;
     inputEl = el;
     console.log('[InfraMask] attached to input box on', adapter.name);

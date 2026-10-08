@@ -12,7 +12,12 @@ if (typeof window !== 'undefined' && window.InfraMaskDetectors) {
 
 // ---- Credentials & secrets ----
 
-const CREDENTIAL_KV = /\b(password|passwd|pwd|secret|api[_-]?key|access[_-]?key|token|auth|username|user(?:name)?)\s*[:=]\s*["']?([^\s"'&,;]{3,})["']?/gid;
+// A quoted value is captured up to its matching closing quote so a passphrase containing
+// spaces ("hunter 2 trooper") isn't truncated at the first space the way an unquoted value
+// has to be (there's no other way to tell where an unquoted value ends). Three alternate
+// value groups (quoted-double, quoted-single, unquoted) rather than one, since each needs a
+// different boundary rule; runCredentialKV below picks whichever one actually matched.
+const CREDENTIAL_KV = /\b(password|passwd|pwd|secret|api[_-]?key|access[_-]?key|token|auth|username|user(?:name)?)\s*[:=]\s*(?:"([^"]{3,})"|'([^']{3,})'|([^\s"'&,;]{3,}))/gid;
 const AWS_ACCESS_KEY = /\b(AKIA|ASIA)[0-9A-Z]{16}\b/g;
 const PREFIXED_API_KEY = /\b(sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{36}|gho_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{20,}|xox[baprs]-[a-zA-Z0-9-]{10,}|AIza[0-9A-Za-z_-]{35})\b/g;
 const BEARER_TOKEN = /\bBearer\s+[a-zA-Z0-9\-._~+/]+=*/g;
@@ -89,7 +94,10 @@ function runCredentialKV(regex, text) {
   regex.lastIndex = 0;
   while ((m = regex.exec(text)) !== null) {
     const [start, end] = m.indices[0];
-    const [valueStart, valueEnd] = m.indices[2];
+    // Groups 2/3/4 are the double-quoted/single-quoted/unquoted value alternatives - exactly
+    // one of them matched, so use whichever has indices.
+    const groupIndex = [2, 3, 4].find((i) => m.indices[i]);
+    const [valueStart, valueEnd] = m.indices[groupIndex];
     matches.push({
       type: 'credential_kv',
       start,
@@ -97,7 +105,7 @@ function runCredentialKV(regex, text) {
       value: m[0],
       maskStart: valueStart,
       maskEnd: valueEnd,
-      maskValue: m[2],
+      maskValue: m[groupIndex],
     });
     if (m[0].length === 0) regex.lastIndex++;
   }
