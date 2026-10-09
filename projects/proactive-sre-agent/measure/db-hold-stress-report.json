@@ -1,8 +1,8 @@
 {
   "status": "ok",
   "lead_time_seconds": 5.0,
-  "leading_crossed_at": 1791527166.0,
-  "lagging_crossed_at": 1791527171.0,
-  "leading_query": "hikaricp_connections_pending{job=\"demo-api\"}",
+  "leading_crossed_at": 1791570938.0,
+  "lagging_crossed_at": 1791570943.0,
+  "leading_query": "sum(hikaricp_connections_pending{job=\"demo-api\"})",
   "lagging_query": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{job=\"demo-api\"}[1m])) by (le))"
 }

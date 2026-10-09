@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,19 +40,50 @@ class OrderControllerTest {
     }
 
     @Test
-    void shouldReturn400WhenCustomerNameIsBlank() throws Exception {
+    void shouldReturn400WithFieldErrorWhenCustomerNameIsBlank() throws Exception {
         mockMvc.perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new OrderRequest("", "widget", 1))))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fields.customerName").exists());
     }
 
     @Test
-    void shouldReturn400WhenQuantityIsZeroOrNegative() throws Exception {
+    void shouldReturn400WithFieldErrorWhenCustomerNameExceedsMaxLength() throws Exception {
+        String tooLong = "a".repeat(256);
+
+        mockMvc.perform(post("/api/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new OrderRequest(tooLong, "widget", 1))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fields.customerName").exists());
+    }
+
+    @Test
+    void shouldReturn400WithFieldErrorWhenQuantityIsZero() throws Exception {
         mockMvc.perform(post("/api/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new OrderRequest("Ashfaq", "widget", 0))))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fields.quantity").exists());
+    }
+
+    @Test
+    void shouldReturn400WithFieldErrorWhenQuantityIsNegative() throws Exception {
+        mockMvc.perform(post("/api/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new OrderRequest("Ashfaq", "widget", -1))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fields.quantity").exists());
+    }
+
+    @Test
+    void shouldReturn400WithFieldErrorWhenQuantityIsNull() throws Exception {
+        mockMvc.perform(post("/api/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"customerName\":\"Ashfaq\",\"item\":\"widget\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fields.quantity").exists());
     }
 
     @Test

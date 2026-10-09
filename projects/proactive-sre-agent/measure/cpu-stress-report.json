@@ -1,8 +1,8 @@
 {
   "status": "ok",
   "lead_time_seconds": 5.0,
-  "leading_crossed_at": 1791527024.0,
-  "lagging_crossed_at": 1791527029.0,
-  "leading_query": "stress_active_cpu_tasks{job=\"demo-api\"}",
+  "leading_crossed_at": 1791542805.0,
+  "lagging_crossed_at": 1791542810.0,
+  "leading_query": "sum(stress_active_cpu_tasks{job=\"demo-api\"})",
   "lagging_query": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{job=\"demo-api\"}[1m])) by (le))"
 }

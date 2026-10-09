@@ -11,8 +11,12 @@ import requests
 def query_range(
     prom_url: str, query: str, start: float, end: float, step: float
 ) -> list[tuple[float, float]]:
-    """Runs a Prometheus range query and returns (timestamp, value) pairs for the
-    first result series, or an empty list if the query matched no series."""
+    """Runs a Prometheus range query and returns (timestamp, value) pairs.
+
+    Raises ValueError if the query matches more than one series: Prometheus does not
+    guarantee series order, so silently picking one would make the result arbitrary.
+    The caller's query should aggregate (sum(...), max(...), etc.) to guarantee one
+    series back. Returns an empty list if the query matched no series at all."""
     response = requests.get(
         f"{prom_url}/api/v1/query_range",
         params={"query": query, "start": start, "end": end, "step": step},
@@ -23,7 +27,16 @@ def query_range(
     results = payload.get("data", {}).get("result", [])
     if not results:
         return []
-    return [(float(ts), float(value)) for ts, value in results[0]["values"]]
+    if len(results) > 1:
+        raise ValueError(
+            f"query {query!r} matched {len(results)} series; "
+            "use an aggregating query (sum(...), max(...)) to get exactly one"
+        )
+    return [
+        (float(ts), float(value))
+        for ts, value in results[0]["values"]
+        if value.lower() != "nan"
+    ]
 
 
 def first_crossing(series: list[tuple[float, float]], threshold: float) -> float | None:
@@ -54,9 +67,24 @@ def compute_lead_time(
     if lagging_ts is None:
         return {"status": "lagging_never_crossed", "lead_time_seconds": None}
 
+    # If the lagging series is already at/above threshold at the very first sample,
+    # that first sample isn't a real "crossing" -- it means the window started after
+    # the breach already happened, so no lead time claim can be made from this data.
+    if lagging[0][1] >= lagging_threshold:
+        return {"status": "already_breached", "lead_time_seconds": None}
+
+    lead_time = lagging_ts - leading_ts
+    if lead_time < 0:
+        return {
+            "status": "lagging_crossed_first",
+            "lead_time_seconds": lead_time,
+            "leading_crossed_at": leading_ts,
+            "lagging_crossed_at": lagging_ts,
+        }
+
     return {
         "status": "ok",
-        "lead_time_seconds": lagging_ts - leading_ts,
+        "lead_time_seconds": lead_time,
         "leading_crossed_at": leading_ts,
         "lagging_crossed_at": lagging_ts,
     }

@@ -40,16 +40,23 @@ Grafana: http://localhost:3000 (admin/admin, lab-only). Prometheus: http://local
 cd projects/proactive-sre-agent/measure
 pip install -r requirements.txt
 python measure.py --prom-url http://localhost:9090 --start <unix_ts> --end <unix_ts> \
-  --leading-query 'stress_active_cpu_tasks{job="demo-api"}' --leading-threshold 1 \
+  --leading-query 'sum(stress_active_cpu_tasks{job="demo-api"})' --leading-threshold 1 \
   --lagging-query 'histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{job="demo-api"}[1m])) by (le))' \
   --lagging-threshold 0.05
 ```
+
+`measure.py` requires an aggregating query (`sum(...)`, `max(...)`) — it raises if a query
+matches more than one series, since Prometheus doesn't guarantee series order and picking
+one silently would be an arbitrary number, not a real one. This matters because demo-api
+can run multiple replicas (the HPA may have scaled it out).
 
 ## Measured results
 
 - `cpu-stress`: leading indicator (`stress_active_cpu_tasks`) crossed its threshold
   **5.0 seconds** before the lagging indicator (p99 latency) crossed its own. Full report:
-  [`measure/cpu-stress-report.json`](measure/cpu-stress-report.json).
+  [`measure/cpu-stress-report.json`](measure/cpu-stress-report.json). Measured after fixing
+  a Prometheus scrape-topology bug (see DECISIONS.md, 2026-10-10) that could otherwise mix
+  different pods' values into one series once the HPA scaled out.
 - `db-hold-stress`: leading indicator (`hikaricp_connections_pending`) crossed its
   threshold **5.0 seconds** before the lagging indicator crossed its own. Full report:
   [`measure/db-hold-stress-report.json`](measure/db-hold-stress-report.json).
