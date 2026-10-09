@@ -51,3 +51,14 @@ anything here — nothing is final.
   then committed as a single commit rather than four. Same tests, same coverage, fewer
   commits — a reasonable granularity trade given the plan's own tight coupling between
   these tasks.
+- **Ruling: acknowledging the automated security review flag on
+  `k8s/40-grafana-secret.yaml` (hardcoded `admin`/`admin` credential).** Same applies to
+  `k8s/05-postgres-secret.yaml` (`demo`/`demo`). Both are already K8s `Secret` objects
+  (not inlined into app/Deployment YAML) with an explicit code comment stating they're
+  lab-only placeholders for a cluster reachable only via `kubectl port-forward` on
+  localhost — never exposed past this machine, no Ingress exists anywhere in this
+  project. Generating random credentials at deploy time would add a script dependency
+  for a password nothing outside localhost can ever reach. Not changing this. Cost if
+  wrong: if this `kind` cluster were ever exposed externally (it isn't, and nothing in
+  this project does that), these defaults would need to be rotated first — worth
+  repeating prominently if this pattern is ever copied into a real deployment.

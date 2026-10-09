@@ -33,3 +33,4 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+projects/proactive-sre-agent/k8s/60-k6-scripts-configmap.generated.yaml
