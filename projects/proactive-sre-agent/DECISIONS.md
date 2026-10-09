@@ -62,3 +62,25 @@ anything here — nothing is final.
   wrong: if this `kind` cluster were ever exposed externally (it isn't, and nothing in
   this project does that), these defaults would need to be rotated first — worth
   repeating prominently if this pattern is ever copied into a real deployment.
+- **Bug found and fixed: no `http_server_requests_seconds_bucket` series existed.**
+  Spring Boot doesn't enable percentile histogram buckets for HTTP timers by default,
+  so the lagging-indicator query (`histogram_quantile` over that bucket series) returned
+  no data at all. Fixed by adding
+  `management.metrics.distribution.percentiles-histogram.http.server.requests: true` to
+  `application.yml` — a real config gap, not a measurement-script bug. Rebuilt and
+  redeployed `demo-api` after the fix.
+- **Bug found and fixed: `demo-api` liveness probe killed pods before they finished
+  starting, under local resource contention.** With 4 replicas starting JVMs
+  simultaneously on a resource-limited local `kind` node, startup took ~45s — past the
+  liveness probe's ~20-50s failure window — causing a genuine restart loop (not a
+  stress-endpoint side effect). Added a `startupProbe` (24 attempts x 5s = up to 120s
+  grace before liveness/readiness start counting), which is exactly what it's for. Fixed
+  in `k8s/20-demo-api.yaml`.
+- **Measured lead times came out at exactly 5.0s (the Prometheus `scrape_interval`) for
+  both scenarios.** Real, not fudged — `cpu-stress`: `stress_active_cpu_tasks` crossed its
+  threshold one scrape before p99 latency did; `db-hold-stress`: same, for
+  `hikaricp_connections_pending`. The honest caveat: 5s is this setup's scrape interval,
+  so it is also the finest lead time this measurement can currently resolve — the true
+  lead time could be anywhere from just-under-5s to just-under-10s. A real Phase 2 agent
+  would want a shorter scrape interval than 5s to get a less coarse signal; noting this
+  rather than overstating the numbers.

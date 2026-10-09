@@ -27,6 +27,9 @@ management:
   metrics:
     tags:
       application: demo-api
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
 
 server:
   port: 8080
