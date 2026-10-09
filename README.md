@@ -30,6 +30,11 @@ design, and Model Context Protocol (MCP) servers among them.
     prompt-to-deployed-app platform: a user prompt drives an agent that writes and runs a
     full-stack codebase inside an isolated per-session Kubernetes sandbox, with live preview
     and an explicit, audited deploy-to-Kubernetes tool call.
+  - [`proactive-sre-agent`](designs/proactive-sre-agent/README.md) — a two-phase project:
+    an observable backend + Postgres + Prometheus/Grafana + a reactive HPA baseline in
+    Kubernetes (Phase 1, implemented), then an MCP-driven agent that reads Grafana and acts
+    on Kubernetes to fix problems from their leading-indicator trend, before threshold-based
+    tools like HPA would react (Phase 2, future design).
 - **`projects/`** — actual working code.
   - [`docker-copilot`](projects/docker-copilot/README.md) — a human-in-the-loop chat agent
     for observing and managing local Docker containers: free read access, every
