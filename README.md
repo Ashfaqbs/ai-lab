@@ -39,6 +39,11 @@ design, and Model Context Protocol (MCP) servers among them.
   - [`docker-copilot`](projects/docker-copilot/README.md) — a human-in-the-loop chat agent
     for observing and managing local Docker containers: free read access, every
     state-changing action gated behind explicit human approval.
+  - [`proactive-sre-agent`](projects/proactive-sre-agent/README.md) — Phase 1 of the
+    `proactive-sre-agent` design: an observable Spring Boot + Postgres service with
+    on-demand CPU/memory/DB-pool stress endpoints, Prometheus/Grafana, a baseline CPU-based
+    HPA, and a Python script that measures how far ahead of failure the leading indicators
+    actually climb.
   - [`inframask-extension`](projects/inframask-extension/README.md) — a Chrome extension
     implementing the `inframask` design: masks passwords, API keys, bootstrap servers, and
     other infra identifiers before they reach an AI chat UI, and restores them in the
