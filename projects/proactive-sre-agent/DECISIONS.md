@@ -38,3 +38,16 @@ anything here — nothing is final.
   have given, just via the cluster instead of via Testcontainers. Cost if wrong: a bug in
   Flyway migration syntax or JPA mapping would surface at cluster deploy time instead of
   at `mvn test` time — same detection, one stage later.
+- **Bug found and fixed: `MetricsEndpointTest` needed `@AutoConfigureObservability`.**
+  Spring Boot 3's test support disables metrics export by default under `@SpringBootTest`
+  for speed (`management.defaults.metrics.export.enabled=false`); the plan's original
+  test didn't account for this. Also needed one prior HTTP call before scraping, since
+  `http_server_requests_seconds_count` for a request only appears after that request
+  completes — the scrape call itself doesn't count toward its own metric. Both fixed in
+  the test; not a production code bug.
+- **Tasks 1-4 executed as one batch, not strictly one task per commit.** The plan's
+  `GlobalExceptionHandler` (Task 1) already referenced `StressRequestValidationException`
+  (Task 4), so Tasks 1-4 were implemented together and verified with one full test run,
+  then committed as a single commit rather than four. Same tests, same coverage, fewer
+  commits — a reasonable granularity trade given the plan's own tight coupling between
+  these tasks.
