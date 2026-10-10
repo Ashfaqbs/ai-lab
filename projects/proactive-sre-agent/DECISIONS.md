@@ -241,3 +241,21 @@ fixed vs. deferred below.
   lead time could be anywhere from just-under-5s to just-under-10s. A real Phase 2 agent
   would want a shorter scrape interval than 5s to get a less coarse signal; noting this
   rather than overstating the numbers.
+
+## 2026-10-10 — Prior-art research added
+
+- After both phases were implemented and verified, researched what mature open source
+  already does this job, to avoid mistaking this POC's mechanism for novel engineering.
+  Full findings in [`../../designs/proactive-sre-agent/PRIOR_ART.md`](../../designs/proactive-sre-agent/PRIOR_ART.md).
+- Headline findings: **KEDA** (CNCF graduated) + **PredictKube** is the productized
+  version of `agent/trend.py`'s hand-rolled linear regression (PromQL's own
+  `predict_linear()` is the built-in equivalent of the regression itself). **HolmesGPT**
+  (Robusta, CNCF Sandbox) is the closest existing production analog to the live
+  Grafana-MCP + Kubernetes-MCP + LLM loop this project's design doc originally envisioned
+  and Phase 2 deliberately did not build. **grafana/mcp-grafana** and
+  **containers/kubernetes-mcp-server** are the ecosystem-standard MCP servers that
+  `agent/grafana_tool.py`/`agent/k8s_tool.py` are written as stand-ins for.
+- **Ruling:** did not change any code in response to this research — it's a reference
+  doc, not an action item. Whether to swap the hand-rolled trend logic for
+  KEDA/PredictKube, benchmark against HolmesGPT, or leave this as a completed learning
+  exercise is left as an open question for the project owner, not decided here.

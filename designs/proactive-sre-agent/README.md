@@ -6,7 +6,11 @@ Phase 2 shipped as a deterministic trend-detection engine rather than the live
 Grafana-MCP + Kubernetes-MCP + LLM-reasoning loop this design describes below — see that
 project's `DECISIONS.md` (2026-10-09, "Phase 2 scope ruling") for why, and for how the
 two tool-call sites are written to make swapping in real MCP calls a contained
-follow-up rather than a rewrite.
+follow-up rather than a rewrite. See [`PRIOR_ART.md`](PRIOR_ART.md) for the mature
+open-source projects (KEDA+PredictKube, Keptn, Robusta, HolmesGPT, k8sgpt,
+grafana/mcp-grafana, containers/kubernetes-mcp-server) that already solve pieces of this
+problem, often with more features and a real maintainer community, found after both
+phases were built and verified.
 
 ## 1. Problem statement
 

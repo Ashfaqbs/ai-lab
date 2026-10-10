@@ -125,3 +125,15 @@ Phase 1 and Phase 2 both implemented and verified end to end against a real `kin
 cluster, including a genuine proactive-before-breach scaling event (not a mocked or
 simulated one). See DECISIONS.md for the full decision log, what got reviewed and fixed,
 and what's deliberately deferred.
+
+## Prior art: mature open source doing this already
+
+This is a learning POC, not a novel technique. Before extending it further, see
+[`../../designs/proactive-sre-agent/PRIOR_ART.md`](../../designs/proactive-sre-agent/PRIOR_ART.md)
+for the open-source projects that already solve pieces of this with more features and
+real maintainer backing — notably **KEDA + PredictKube** (predictive autoscaling),
+**Keptn** / **Robusta** / **StackStorm** (Prometheus-driven remediation workflows),
+**HolmesGPT** / **k8sgpt** (LLM agents over live observability data), and
+**grafana/mcp-grafana** / **containers/kubernetes-mcp-server** (the MCP servers this
+project's `grafana_tool.py`/`k8s_tool.py` stand in for). PromQL's own `predict_linear()`
+is the built-in equivalent of `agent/trend.py`'s hand-rolled linear regression.
