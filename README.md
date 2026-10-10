@@ -32,18 +32,21 @@ design, and Model Context Protocol (MCP) servers among them.
     and an explicit, audited deploy-to-Kubernetes tool call.
   - [`proactive-sre-agent`](designs/proactive-sre-agent/README.md) — a two-phase project:
     an observable backend + Postgres + Prometheus/Grafana + a reactive HPA baseline in
-    Kubernetes (Phase 1, implemented), then an MCP-driven agent that reads Grafana and acts
-    on Kubernetes to fix problems from their leading-indicator trend, before threshold-based
-    tools like HPA would react (Phase 2, future design).
+    Kubernetes, then an agent that reads metric trends and scales Kubernetes to fix
+    problems before they fully breach, ahead of a threshold-based tool like HPA. Both
+    phases implemented; Phase 2 shipped as a deterministic trend engine rather than the
+    live-MCP-plus-LLM loop originally envisioned here (see the project's DECISIONS.md).
 - **`projects/`** — actual working code.
   - [`docker-copilot`](projects/docker-copilot/README.md) — a human-in-the-loop chat agent
     for observing and managing local Docker containers: free read access, every
     state-changing action gated behind explicit human approval.
-  - [`proactive-sre-agent`](projects/proactive-sre-agent/README.md) — Phase 1 of the
-    `proactive-sre-agent` design: an observable Spring Boot + Postgres service with
-    on-demand CPU/memory/DB-pool stress endpoints, Prometheus/Grafana, a baseline CPU-based
-    HPA, and a Python script that measures how far ahead of failure the leading indicators
-    actually climb.
+  - [`proactive-sre-agent`](projects/proactive-sre-agent/README.md) — the
+    `proactive-sre-agent` design, fully implemented: an observable Spring Boot + Postgres
+    service with on-demand CPU/memory/DB-pool stress endpoints, Prometheus/Grafana, a
+    baseline CPU-based HPA, a Python script that measures how far ahead of failure the
+    leading indicators actually climb, and a trend-detection agent that scales the
+    service up before a tracked metric breaches, with a captured real example of it
+    doing exactly that.
   - [`inframask-extension`](projects/inframask-extension/README.md) — a Chrome extension
     implementing the `inframask` design: masks passwords, API keys, bootstrap servers, and
     other infra identifiers before they reach an AI chat UI, and restores them in the

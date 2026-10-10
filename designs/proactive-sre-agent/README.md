@@ -1,8 +1,12 @@
 # Proactive SRE Agent: An MCP-Driven System That Fixes Issues Before They Happen
 
-**Status:** Design proposal. Phase 1 (the observable base system) implemented in
-[`projects/proactive-sre-agent`](../../projects/proactive-sre-agent/README.md); the agent
-itself (Phase 2) is not yet implemented.
+**Status:** Phase 1 (the observable base system) and Phase 2 (the agent) both
+implemented in [`projects/proactive-sre-agent`](../../projects/proactive-sre-agent/README.md).
+Phase 2 shipped as a deterministic trend-detection engine rather than the live
+Grafana-MCP + Kubernetes-MCP + LLM-reasoning loop this design describes below — see that
+project's `DECISIONS.md` (2026-10-09, "Phase 2 scope ruling") for why, and for how the
+two tool-call sites are written to make swapping in real MCP calls a contained
+follow-up rather than a rewrite.
 
 ## 1. Problem statement
 

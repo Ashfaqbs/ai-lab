@@ -3,6 +3,60 @@
 Running log of autonomous decisions made while Ashfaq was away. Review and challenge
 anything here — nothing is final.
 
+## 2026-10-10 — Phase 2 implementation notes
+
+- **What got built:** `projects/proactive-sre-agent/agent/` — a Python agent that polls
+  Prometheus for `stress_active_cpu_tasks` and `hikaricp_connections_pending`, fits a
+  least-squares trend line over the last 5 samples, and projects each metric
+  `--lookahead` seconds ahead. If the *projection* breaches a pain threshold (3.0) while
+  the *current* value hasn't yet (reason: `"proactive"`), or the current value is
+  already at/above it (reason: `"reactive"`, a safety fallback), it scales the demo-api
+  Deployment up by one replica via the Kubernetes API (capped at 4, same ceiling as the
+  HPA, with a cooldown between actions). Every tick is logged as one JSON line (decision
+  inputs + action taken or skipped-and-why) to both stdout and an audit log file.
+  `grafana_tool.py` and `k8s_tool.py` are the two swappable "MCP stand-in" modules per
+  the ruling below. 20 unit tests (`test_trend.py`, `test_decision.py`, `test_agent.py`),
+  all passing, cover the trend math and the decision/loop logic without needing a live
+  cluster.
+- **Real proactive catch, captured as evidence:**
+  `projects/proactive-sre-agent/agent/sample-audit-proactive-catch.log` — from a clean,
+  isolated run (HPA temporarily removed to avoid a confound, see below) using a
+  deliberately gradual load script (`scripts/gentle-cpu-ramp.sh`) instead of k6's fast
+  ramp. The agent scaled demo-api 1 -> 2 -> 3 -> 4 three separate times while
+  `stress_active_cpu_tasks` was still at `2.0` — below the `3.0` pain threshold — purely
+  because the fitted trend projected a breach within the 10s lookahead. That is the
+  actual "fix it before it happens" mechanism working, not simulated.
+- **Two honest negative findings before that clean run:**
+  1. k6's `cpu-stress.js` ramps fast enough that the metric jumps from 0 to 4 within a
+     single 5-second Prometheus scrape interval — too fast for any trend-based
+     prediction to get ahead of it; every action landed as `"reactive"`, never
+     `"proactive"`, against that specific load shape. Trend detection needs a sampling
+     rate faster than the fault's climb rate; this one wasn't.
+  2. Running the agent back-to-back with the HPA active, right after an earlier HPA-
+     triggered scale-out, meant the HPA had already pushed replicas to 4 (its 5-minute
+     scale-down stabilization window hadn't elapsed) before the agent's own decision
+     loop got a turn — making the comparison meaningless, since HPA had effectively
+     already "won" before the test started. Fixed by deleting the HPA for one isolated
+     run, which is also the methodologically correct way to test "does the agent alone
+     catch this ahead of the metric fully breaching" without a second actor muddying the
+     result.
+  Both are documented rather than hidden, and both are realistic lessons for anyone
+  actually productionizing this idea: proactive automation needs sampling faster than
+  the failure mode's climb rate, and two autoscalers (HPA + a custom agent) acting on
+  the same Deployment need explicit coordination, not just independent cooldowns.
+- **Ruling: deployed the agent to the cluster to verify it (containerized, real RBAC,
+  real in-cluster Prometheus URL), then deleted the Deployment afterward rather than
+  leaving it running.** It worked — confirmed via `kubectl logs` that the in-cluster
+  ServiceAccount's scoped RBAC (not my local kubeconfig) could successfully patch
+  demo-api's replica count. But leaving an agent that autonomously changes a Deployment's
+  replica count running unsupervised, on a cluster the user will be inspecting when they
+  get back without having watched it operate even once themselves, seemed like the wrong
+  default. The manifests (`k8s/70-agent.yaml`), image, and the Dockerfile are all
+  committed and ready — `kubectl apply -f projects/proactive-sre-agent/k8s/70-agent.yaml`
+  redeploys it in one command whenever the user wants to watch it run live. Cost if
+  wrong: one extra command to start it back up; the alternative (leaving it running
+  unsupervised) risked a worse surprise.
+
 ## 2026-10-09 — Phase 2 scope ruling
 
 - **Ruling: Phase 2's agent is a deterministic trend-detection engine, not a live

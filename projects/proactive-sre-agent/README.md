@@ -79,8 +79,49 @@ can run multiple replicas (the HPA may have scaled it out).
   to a Windows/Docker-Desktop npipe detection issue unrelated to the code; the same code
   path is verified for real by the live cluster deployment instead.
 
+## Phase 2: the proactive agent
+
+`projects/proactive-sre-agent/agent/` — polls Prometheus, fits a trend line over the
+leading indicators, and scales demo-api up *before* a metric breaches its pain
+threshold, not after. **Note on scope:** this is a deterministic trend-detection engine,
+not a live LLM-reasoning loop over real Grafana MCP + Kubernetes MCP servers — see
+DECISIONS.md (2026-10-09, "Phase 2 scope ruling") for why, and for how to extend it into
+one. `grafana_tool.py` and `k8s_tool.py` are written as clean, swappable stand-ins for
+exactly those two MCP tool calls.
+
+Run it locally against the live cluster:
+```bash
+cd projects/proactive-sre-agent/agent
+pip install -r requirements.txt
+kubectl -n ailab-poc port-forward svc/prometheus 9090:9090 &
+python agent.py --prom-url http://localhost:9090 --kubeconfig --duration 120
+```
+
+Or deploy it into the cluster (uses its own scoped ServiceAccount, no local kubeconfig):
+```bash
+docker build -t ailab/proactive-agent:local projects/proactive-sre-agent/agent
+kind load docker-image ailab/proactive-agent:local --name ailab-poc
+kubectl apply -f projects/proactive-sre-agent/k8s/70-agent.yaml
+kubectl -n ailab-poc logs -f deployment/proactive-agent
+```
+
+**Real proactive catch, captured as evidence:**
+[`agent/sample-audit-proactive-catch.log`](agent/sample-audit-proactive-catch.log) — the
+agent scaled demo-api 1 -> 2 -> 3 -> 4, three separate times, while
+`stress_active_cpu_tasks` was still at `2.0` (below the `3.0` pain threshold), purely
+because the fitted trend projected a breach within the 10-second lookahead window. Two
+honest negative findings before reaching this clean result (k6's default ramp is too
+fast for 5s-resolution trend detection; running the agent right after an HPA-triggered
+scale-out contaminates the comparison) are written up in DECISIONS.md rather than
+smoothed over.
+
+20 unit tests (`test_trend.py`, `test_decision.py`, `test_agent.py`) cover the trend math
+and the proactive/reactive decision logic without needing a live cluster — run with
+`python -I -m pytest` from `projects/proactive-sre-agent/agent/`.
+
 ## Status
 
-Phase 1 complete and verified end to end against a real `kind` cluster. Phase 2 (the
-MCP-driven proactive agent — Grafana MCP read path, Kubernetes MCP action path,
-trend-detection decision loop) follows next.
+Phase 1 and Phase 2 both implemented and verified end to end against a real `kind`
+cluster, including a genuine proactive-before-breach scaling event (not a mocked or
+simulated one). See DECISIONS.md for the full decision log, what got reviewed and fixed,
+and what's deliberately deferred.
