@@ -1,0 +1,8 @@
+name: HTTP MCP Server
+version: 0.0.1
+schema: v1
+mcpServers:
+    name: Add-MCP-Server
+    type: streamable-http
+    url: http://127.0.0.1:8000/mcp/
+

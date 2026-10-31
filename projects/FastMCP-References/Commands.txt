@@ -1,0 +1,59 @@
+
+ - Simple STDIO 
+
+
+ ```
+
+ from code 
+
+ if __name__ == "__main__":
+    mcp.run()
+
+
+config 
+
+  "ADD-Server": {
+      "command": "C:\\tmp\\git\\MCP\\henv\\Scripts\\python.exe",
+      "args": [
+        "C:\\tmp\\git\\MCP\\server.py"
+      ],
+      "env": {},
+      "transport": "stdio"
+    }
+ ```
+
+- working fine 
+
+
+
+-  HTTP transport code 
+
+```
+
+if __name__ == "__main__":
+    mcp.run(transport="http", host="127.0.0.1", port=8000)
+
+config 
+
+connecting to claude desktop via fastMCP command 
+
+- Connect HTTP with proxy
+
+```
+works
+
+Create a proxy code and 
+
+(henv) PS C:\tmp\git\MCP> fastmcp install claude-desktop proxy.py
+Successfully installed 'Simple Math Proxy' in Claude Desktop
+(henv) PS C:\tmp\git\MCP> 
+
+and use from claude 
+
+
+claude config is automatically created and tested 
+
+
+
+
+```

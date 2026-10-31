@@ -1,0 +1,19 @@
+
+// this is a proxy server 
+{
+  "mcpServers": {
+    "Simple Math Proxy": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--with",
+        "fastmcp",
+        "fastmcp",
+        "run",
+        "C:\\tmp\\git\\MCP\\proxy.py" 
+      ],
+      "env": {},
+      "transport": "stdio"
+    }
+  }
+}
