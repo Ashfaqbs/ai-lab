@@ -15,6 +15,7 @@ from solana.rpc.commitment import Confirmed
 from solana.rpc.models import TxOpts
 from solders.message import Message
 from solders.pubkey import Pubkey
+from solders.signature import Signature
 from solders.system_program import TransferParams, transfer
 from solders.transaction import VersionedTransaction
 
@@ -122,7 +123,7 @@ async def get_transaction_status(signature: str) -> dict:
 
     client = _client()
     try:
-        resp = await client.get_signature_statuses([signature])
+        resp = await client.get_signature_statuses([Signature.from_string(signature)])
         status = resp.value[0]
         if status is None:
             return {"signature": signature, "status": "not_found"}
